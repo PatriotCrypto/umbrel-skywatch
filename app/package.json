@@ -1,6 +1,6 @@
 {
   "name": "skywatch-radar",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Live radar screen for aircraft around your home, powered by the Wingbits API",
   "private": true,
   "type": "module",

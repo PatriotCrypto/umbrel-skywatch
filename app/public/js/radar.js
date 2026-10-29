@@ -145,7 +145,13 @@ export class Radar {
     const now = performance.now();
     const ctx = this.ctx;
     const display = this.getDisplay();
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    let sx = 0; let sy = 0;
+    if (this.bang && !this.bang.reduced) {
+      const k = Math.max(0, 1 - (now - this.bang.t0) / 900);
+      sx = (Math.random() - 0.5) * 22 * k; sy = (Math.random() - 0.5) * 22 * k;
+    }
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, sx * this.dpr, sy * this.dpr);
+    if (sx || sy) { ctx.fillStyle = '#000'; ctx.fillRect(-30, -30, this.w + 60, this.h + 60); }
     const g = this.geom();
     const sweepPeriod = (display.sweepSeconds || 8) * 1000;
     const sweep = ((now % sweepPeriod) / sweepPeriod) * 360;
@@ -173,7 +179,7 @@ export class Radar {
         const glow = this.lights.level * (k < 0.08 ? k / 0.08 : k > 0.75 ? (1 - k) / 0.25 : 1);
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        const passes = glow > 0.5 ? 3 : glow > 0.15 ? 2 : 1;
+        const passes = glow > 1 ? 5 : glow > 0.5 ? 3 : glow > 0.15 ? 2 : 1;
         for (let i = 0; i < passes; i++) { ctx.globalAlpha = Math.min(1, glow * 1.3); this.theme.grid(r); }
         ctx.restore();
       }
@@ -228,6 +234,7 @@ export class Radar {
 
     this.drawFlyby(r);
     this.theme.foreground(r, list);
+    this.drawBang(r);
     this.visible = list;
   }
 
@@ -253,6 +260,70 @@ export class Radar {
   }
 
   lightsUp(level, ms) { this.lights = { level, t0: performance.now(), ms }; }
+
+  // Seven clicks: flash, shockwaves, a burst of debris, a shake, and every light on
+  bigBang() {
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const parts = [];
+    for (let i = 0; i < (reduced ? 0 : 420); i++) {
+      const a = Math.random() * Math.PI * 2;
+      parts.push({ a, v: 0.25 + Math.random() ** 2 * 2.6, w: 0.6 + Math.random() * 2.2, hue: Math.random() });
+    }
+    this.bang = { t0: performance.now(), parts, reduced };
+    this.lightsUp(1.6, 9000);
+  }
+
+  drawBang(r) {
+    const b = this.bang;
+    if (!b) return;
+    const { ctx, w, h, cx, cy } = r;
+    const t = performance.now() - b.t0;
+    if (t > 4200) { this.bang = null; return; }
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#ffffff';
+    const maxR = Math.hypot(w, h);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    // core glow
+    const core = Math.max(0, 1 - t / 1600);
+    if (core > 0) {
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR * (0.15 + t / 3000));
+      g.addColorStop(0, `rgba(255,255,255,${core})`);
+      g.addColorStop(0.25, `rgba(255,240,200,${core * 0.6})`);
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    }
+    if (!b.reduced) {
+      // shockwave rings
+      for (let i = 0; i < 3; i++) {
+        const tt = t - i * 260;
+        if (tt <= 0) continue;
+        const k = tt / 2600;
+        if (k > 1) continue;
+        ctx.strokeStyle = i === 1 ? accent : '#ffffff';
+        ctx.globalAlpha = (1 - k) * 0.9;
+        ctx.lineWidth = 34 * (1 - k) + 2;
+        ctx.beginPath(); ctx.arc(cx, cy, k * maxR * 0.9, 0, Math.PI * 2); ctx.stroke();
+      }
+      // debris streaks
+      ctx.globalAlpha = 1;
+      const life = Math.max(0, 1 - t / 3200);
+      for (const p of b.parts) {
+        const d = p.v * t * 0.55;
+        const tail = Math.min(d, 18 + p.v * 40);
+        const x1 = cx + Math.cos(p.a) * d; const y1 = cy + Math.sin(p.a) * d;
+        if (x1 < -50 || y1 < -50 || x1 > w + 50 || y1 > h + 50) continue;
+        ctx.strokeStyle = p.hue > 0.7 ? accent : `rgba(255,${200 + Math.round(p.hue * 55)},${160 + Math.round(p.hue * 90)},1)`;
+        ctx.globalAlpha = life;
+        ctx.lineWidth = p.w;
+        ctx.beginPath(); ctx.moveTo(x1 - Math.cos(p.a) * tail, y1 - Math.sin(p.a) * tail); ctx.lineTo(x1, y1); ctx.stroke();
+      }
+    }
+    ctx.restore();
+    // the flash itself, on top of everything
+    const flash = b.reduced ? 0 : t < 90 ? 1 : Math.max(0, 1 - (t - 90) / 700);
+    if (flash > 0) { ctx.fillStyle = `rgba(255,255,255,${flash})`; ctx.fillRect(0, 0, w, h); }
+  }
+
 
   hit(px, py) {
     const c = this.themeState.controllerRect;

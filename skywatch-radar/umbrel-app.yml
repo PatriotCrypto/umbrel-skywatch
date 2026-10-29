@@ -2,7 +2,7 @@ manifestVersion: 1
 id: skywatch-radar
 category: automation
 name: Skywatch Radar
-version: "0.1.1"
+version: "0.1.2"
 tagline: A live radar screen for the aircraft around your home
 icon: https://raw.githubusercontent.com/PatriotCrypto/umbrel-skywatch/main/app/public/img/icon.svg
 description: >-
@@ -37,12 +37,7 @@ description: >-
 
   Skywatch is an unofficial community app and is not affiliated with or endorsed by Wingbits.
 releaseNotes: >-
-  Fixes: the budget buttons (Pace, A share, Pause) now switch properly, and the heatmap
-  no longer slows the radar down or freezes it on load. New: the Wingnaut controller
-  (formerly operator) is much bigger, with a Small / Medium / Large / XL size setting;
-  the keyboard shortcuts now show above the Wingbits chip and fade out with the toolbar;
-  the passing ship has a dozen-plus things to say; and there is a new easter egg in the
-  Omniverse view for anyone who knows how pilot-controlled runway lights work.
+  The runway-lights easter egg in the Omniverse view now goes out with a much bigger bang.
 developer: PatriotCrypto
 website: https://github.com/PatriotCrypto/umbrel-skywatch
 dependencies: []

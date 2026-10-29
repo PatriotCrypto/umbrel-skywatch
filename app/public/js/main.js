@@ -278,7 +278,7 @@ function controllerClick() {
   clearTimeout(clickTimer);
   clickTimer = setTimeout(() => {
     const n = clicks; clicks = 0;
-    if (n >= 7) { radar.lightsUp(1, 7000); transmit('Seven clicks. Lights on full. Cleared to land!'); }
+    if (n >= 7) { radar.bigBang(); setTimeout(() => transmit('Seven clicks. Every light in the known universe is on. Cleared to land.'), 1400); }
     else if (n >= 5) { radar.lightsUp(0.6, 5000); transmit('Five clicks, medium intensity. Try seven.'); }
     else if (n >= 3) { radar.lightsUp(0.3, 4000); }
   }, 1200);
