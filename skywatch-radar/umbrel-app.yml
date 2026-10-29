@@ -2,7 +2,7 @@ manifestVersion: 1
 id: skywatch-radar
 category: automation
 name: Skywatch Radar
-version: "0.1.4"
+version: "0.1.5"
 tagline: A live radar screen for the aircraft around your home
 icon: https://raw.githubusercontent.com/PatriotCrypto/umbrel-skywatch/main/app/public/img/icon.svg
 description: >-
@@ -37,8 +37,8 @@ description: >-
 
   Skywatch is an unofficial community app and is not affiliated with or endorsed by Wingbits.
 releaseNotes: >-
-  The Wingnaut ship now passes by every few minutes, and clicking your controller once gets
-  you a radio call. Twenty-five things for the controller to say.
+  The API budget and next-update readout stays on screen again, and reads "Next data in"
+  instead of "Live".
 developer: PatriotCrypto
 website: https://github.com/PatriotCrypto/umbrel-skywatch
 dependencies: []

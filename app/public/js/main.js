@@ -116,9 +116,9 @@ function renderHud() {
   if (st.error) parts.push(`<span class="err">${st.error.message}</span>`);
   if (st.needsHome) parts.push('<span class="warn">Set your home location in Settings to start the radar</span>');
   const next = st.nextPollAt ? Math.max(0, (st.nextPollAt - Date.now()) / 1000) : null;
-  const stateLabel = { watched: 'Live', idle: 'Idle (nobody watching)', quiet: 'Quiet hours', paused: 'Paused' }[b.state] || 'Starting';
+  const stateLabel = { watched: '', idle: 'Idle (nobody watching) · ', quiet: 'Quiet hours · ', paused: 'Paused · ' }[b.state] ?? '';
   if (b.state === 'paused' && b.reason) parts.push(`<span class="warn">${b.reason}</span>`);
-  else if (next !== null) parts.push(`${stateLabel} · next data in <b>${fmtDur(next)}</b> · every ${fmtDur(b.intervalSec)}`);
+  else if (next !== null) parts.push(`${stateLabel}Next data in <b>${fmtDur(next)}</b> · every ${fmtDur(b.intervalSec)}`);
   if (st.plan) {
     const pctUsed = st.plan.monthlyLimit ? (st.plan.monthlyUsed / st.plan.monthlyLimit) * 100 : 0;
     const proj = st.plan.monthlyLimit ? Math.min(100, ((b.projectedAppTotal + (st.plan.monthlyUsed - st.appUsed)) / st.plan.monthlyLimit) * 100) : 0;
@@ -126,8 +126,6 @@ function renderHud() {
     parts.push(`${st.demo ? 'Demo quota' : st.plan.name || 'Plan'} · <b>${fmtNum(st.plan.monthlyRemaining)}</b> of ${fmtNum(st.plan.monthlyLimit)} calls left · ${fmtNum(st.today.total)} today`);
   }
   $('#budgetHud').innerHTML = parts.join('<br>');
-  // problems stay on screen even when the controls fade away
-  $('#budgetHud').classList.toggle('has-alert', Boolean(st.error || st.needsHome || b.state === 'paused'));
 }
 
 // ---------- selection + aircraft card ----------

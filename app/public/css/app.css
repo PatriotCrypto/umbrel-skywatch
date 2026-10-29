@@ -82,7 +82,7 @@ a { color: var(--accent); }
 .tb svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .tb-sep { height: 6px; }
 .badge { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--danger); color: #fff; font: 600 11px/18px system-ui, sans-serif; text-align: center; }
-body.kiosk-idle .toolbar, body.kiosk-idle .shortcuts, body.kiosk-idle .budget:not(.has-alert) { opacity: 0; pointer-events: none; }
+body.kiosk-idle .toolbar, body.kiosk-idle .shortcuts { opacity: 0; pointer-events: none; }
 .budget { transition: opacity .6s; }
 .hud-readout .clock { font-family: var(--font-display); font-size: 30px; line-height: 1.1; color: var(--fg); letter-spacing: 0.06em; text-shadow: var(--glow); }
 .hud-readout .date { font-size: 13px; color: var(--fg); opacity: .85; margin: 2px 0 2px; }
