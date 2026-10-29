@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en" data-theme="ww2">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Skywatch Radar</title>
+  <meta name="theme-color" content="#050a05">
+  <link rel="icon" href="img/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <canvas id="radar" aria-label="Live radar of aircraft around home"></canvas>
+
+  <header class="hud hud-top">
+    <div class="brand">
+      <div class="brand-title" id="brandTitle">SKYWATCH</div>
+      <div class="brand-sub" id="brandSub">Plot room · standing by</div>
+    </div>
+    <div class="hud-readout" id="readout" aria-live="polite"></div>
+  </header>
+
+  <nav class="toolbar" id="toolbar" aria-label="Radar controls">
+    <button class="tb" data-panel="log" title="Spotter log (L)" aria-label="Spotter log"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg></button>
+    <button class="tb" data-panel="stats" title="Stats (S)" aria-label="Stats"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></button>
+    <button class="tb" data-panel="alerts" title="Alerts (A)" aria-label="Alerts"><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4"/></svg><span class="badge" id="alertBadge" hidden></span></button>
+    <button class="tb" data-panel="watch" title="Watchlist (W)" aria-label="Watchlist"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <button class="tb" data-panel="settings" title="Settings (,)" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></button>
+    <span class="tb-sep"></span>
+    <button class="tb" id="themeBtn" title="Next view style (T)" aria-label="Change view style"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/></svg></button>
+    <button class="tb" id="zoomIn" title="Zoom in (+)" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button class="tb" id="zoomOut" title="Zoom out (−)" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+    <button class="tb" id="fullBtn" title="Full screen (F)" aria-label="Full screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  </nav>
+
+  <footer class="hud hud-bottom">
+    <div class="budget" id="budgetHud"></div>
+    <a class="powered" id="powered" href="https://wingbits.com" target="_blank" rel="noopener noreferrer" title="Aircraft data from the Wingbits network">
+      <span class="powered-by">Powered by</span>
+      <span class="powered-mark">Wingbits</span>
+    </a>
+  </footer>
+
+  <div class="banner" id="banner" hidden></div>
+  <div class="toast-wrap" id="toasts" aria-live="polite"></div>
+  <aside class="card" id="card" hidden></aside>
+  <aside class="drawer" id="drawer" hidden>
+    <div class="drawer-head">
+      <h2 id="drawerTitle"></h2>
+      <button class="icon-btn" id="drawerClose" aria-label="Close panel">✕</button>
+    </div>
+    <div class="drawer-body" id="drawerBody"></div>
+  </aside>
+  <div class="transmission" id="transmission" hidden></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+manifestVersion: 1
+id: skywatch-radar
+category: automation
+name: Skywatch Radar
+version: "0.1.0"
+tagline: A live radar screen for the aircraft around your home
+icon: https://raw.githubusercontent.com/PatriotCrypto/umbrel-skywatch/main/app/public/img/icon.svg
+description: >-
+  Skywatch turns any monitor into a radar scope for the sky around your home, using live
+  ADS-B data from the Wingbits network.
+
+
+  Pick a view: a WW2 plot-room scope with a rotating sweep, a modern approach-control
+  screen with data blocks, a holographic deep-field display, or a pixel-art Omniverse.
+  Go full screen and leave it running on a spare monitor.
+
+
+  Skywatch paces itself against your Wingbits API plan. It reads your remaining monthly
+  quota (for free), spreads calls evenly to the reset, polls faster while a screen is
+  open and slows down or pauses when nobody is watching. Contacts glide smoothly between
+  updates using their speed and heading, so even a slow budget looks live. Share the
+  quota with other projects by giving Skywatch a percentage.
+
+
+  Also included: a spotter log and life list of every aircraft and type you have seen,
+  stats and a heatmap, a watchlist, alerts for emergency squawks, military traffic,
+  low aircraft or new types (with optional ntfy push notifications), and an optional
+  GPS-interference overlay. Wingnauts holders can put one of theirs on watch as the
+  radar operator.
+
+
+  You need a Wingbits API key (Wingbits station operators get a free Starter plan).
+  Until you add one, Skywatch runs on simulated demo traffic. Everything it logs stays
+  on your Umbrel. Aircraft in the FAA LADD and PIA privacy programs are shown without
+  registration or owner.
+
+
+  Skywatch is an unofficial community app and is not affiliated with or endorsed by Wingbits.
+releaseNotes: >-
+  First release.
+developer: PatriotCrypto
+website: https://github.com/PatriotCrypto/umbrel-skywatch
+dependencies: []
+repo: https://github.com/PatriotCrypto/umbrel-skywatch
+support: https://github.com/PatriotCrypto/umbrel-skywatch/issues
+port: 3928
+gallery:
+  - https://raw.githubusercontent.com/PatriotCrypto/umbrel-skywatch/main/gallery/1.png
+  - https://raw.githubusercontent.com/PatriotCrypto/umbrel-skywatch/main/gallery/2.png
+  - https://raw.githubusercontent.com/PatriotCrypto/umbrel-skywatch/main/gallery/3.png
+  - https://raw.githubusercontent.com/PatriotCrypto/umbrel-skywatch/main/gallery/4.png
+  - https://raw.githubusercontent.com/PatriotCrypto/umbrel-skywatch/main/gallery/5.png
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+submitter: PatriotCrypto
+submission: https://github.com/PatriotCrypto/umbrel-skywatch

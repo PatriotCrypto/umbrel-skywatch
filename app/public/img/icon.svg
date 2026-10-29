@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="scope" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#16451a"/>
+      <stop offset="1" stop-color="#06160a"/>
+    </radialGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6dff6d" stop-opacity="0"/>
+      <stop offset="1" stop-color="#6dff6d" stop-opacity="0.55"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="#0a120c"/>
+  <circle cx="128" cy="128" r="96" fill="url(#scope)" stroke="#2d6b33" stroke-width="4"/>
+  <g fill="none" stroke="#6dff6d" stroke-opacity="0.35" stroke-width="3">
+    <circle cx="128" cy="128" r="64"/>
+    <circle cx="128" cy="128" r="32"/>
+    <path d="M128 32v192M32 128h192" stroke-opacity="0.2"/>
+  </g>
+  <path d="M128 128 L128 32 A96 96 0 0 1 211 80 Z" fill="url(#beam)"/>
+  <path d="M128 128 L211 80" stroke="#c9ffc4" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="171" cy="70" r="9" fill="#ffb347"/>
+  <circle cx="171" cy="70" r="18" fill="#ffb347" fill-opacity="0.2"/>
+  <circle cx="92" cy="160" r="6" fill="#6dff6d"/>
+  <circle cx="150" cy="182" r="5" fill="#6dff6d" fill-opacity="0.6"/>
+  <circle cx="128" cy="128" r="6" fill="#c9ffc4"/>
+</svg>

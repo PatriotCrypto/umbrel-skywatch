@@ -1,0 +1,17 @@
+{
+  "name": "skywatch-radar",
+  "version": "0.1.0",
+  "description": "Live radar screen for aircraft around your home, powered by the Wingbits API",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  },
+  "dependencies": {
+    "express": "4.22.3",
+    "h3-js": "4.4.0"
+  }
+}
