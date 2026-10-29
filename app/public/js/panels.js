@@ -57,7 +57,9 @@ async function save(patch, quiet = false) {
 
 const seg = (options, value, onPick) => h('div', { class: 'seg' }, options.map(([v, text]) =>
   h('button', { class: v === value ? 'on' : '', type: 'button', onclick: () => onPick(v) }, text)));
-const field = (labelText, input, hint) => h('label', { class: 'field' }, h('span', {}, labelText), input, hint ? h('span', { class: 'hint' }, hint) : null);
+// Only wrap real form inputs in a <label>: a label forwards every click inside it
+// to its first control, which made button groups snap back to their first option.
+const field = (labelText, input, hint) => h(['INPUT', 'SELECT', 'TEXTAREA'].includes(input?.tagName) ? 'label' : 'div', { class: 'field' }, h('span', {}, labelText), input, hint ? h('span', { class: 'hint' }, hint) : null);
 const section = (title, ...kids) => h('div', { class: 'section' }, h('h3', {}, title), ...kids);
 const check = (text, on, onChange) => h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: on, onchange: (e) => onChange(e.target.checked) }), text);
 
@@ -155,7 +157,7 @@ async function renderStats() {
   const display = app.settings.display;
   wrap.append(section('Overlays',
     check('Show heatmap of where aircraft fly', display.heatOverlay, async (v) => { await save({ display: { heatOverlay: v } }, true); loadHeat(); }),
-    h('p', { class: 'muted' }, 'Built from every position the radar has logged. Costs no API calls.')));
+    h('p', { class: 'muted' }, 'Built from every position the radar has logged, so it fills in over the first days. Costs no API calls. Zoom out to see the whole picture.')));
 
   const now = Date.now();
   const hours = [];
@@ -408,13 +410,13 @@ async function renderSettings(opts) {
       r.warning ? h('div', { style: { color: 'var(--warn)', marginTop: '6px' } }, r.warning) : null,
       h('div', { class: 'muted', style: { marginTop: '6px' } }, `Screens are open about ${Math.round((st.watchedFraction || 0.5) * 100)}% of the time; the pacing learns this as you use it.`)].filter(Boolean));
   };
-  const commit = () => { updatePreview(); save({ budget: b }, true); };
+  const commit = () => { updatePreview(); return save({ budget: b }, true); };
   const pct = h('input', { type: 'range', min: 5, max: 100, step: 5, value: b.percent, oninput: (e) => { b.percent = Number(e.target.value); pctOut.textContent = `${b.percent}%`; updatePreview(); }, onchange: commit });
   const pctOut = h('b', {}, `${b.percent}%`);
   const custom = h('input', { type: 'number', min: 5, max: 3600, value: b.customInterval, onchange: (e) => { b.customInterval = Number(e.target.value); commit(); } });
   const segWrap = (key, options) => {
     const holder = h('div', {});
-    const draw = () => holder.replaceChildren(seg(options, b[key], (v) => { b[key] = v; draw(); commit(); refreshPanel(); }));
+    const draw = () => holder.replaceChildren(seg(options, b[key], async (v) => { b[key] = v; draw(); await commit(); refreshPanel(); }));
     draw();
     return holder;
   };
@@ -424,7 +426,7 @@ async function renderSettings(opts) {
     field('Pace', segWrap('preset', [['eco', 'Eco'], ['balanced', 'Balanced'], ['max', 'Max'], ['custom', 'Custom']]), 'Eco spends about half, Balanced about 90%, Max all of the share, spread evenly to the monthly reset.'),
     b.preset === 'custom' ? field('Poll every (seconds) while watched', custom) : null,
     field('When no screen is open', segWrap('idle', [['slow', 'Slow down'], ['pause', 'Pause']]), 'Slow down keeps alerts and the log running in the background.'),
-    check('Quiet hours (poll slowly overnight, even with a screen on)', b.quiet.enabled, (v) => { b.quiet.enabled = v; commit(); refreshPanel(); }),
+    check('Quiet hours (poll slowly overnight, even with a screen on)', b.quiet.enabled, async (v) => { b.quiet.enabled = v; await commit(); refreshPanel(); }),
     b.quiet.enabled ? h('div', { class: 'row' },
       field('From', h('input', { type: 'time', value: b.quiet.start, onchange: (e) => { b.quiet.start = e.target.value; commit(); } })),
       field('To', h('input', { type: 'time', value: b.quiet.end, onchange: (e) => { b.quiet.end = e.target.value; commit(); } }))) : null,
@@ -443,12 +445,13 @@ async function renderSettings(opts) {
       h('span', { class: 'swatch' }, m.swatch.map((c) => h('i', { style: { background: c } }))), h('b', {}, m.title), h('small', {}, m.sub)))),
     h('p', { class: 'muted' }, 'Each screen remembers its own style, so the den monitor can be WW2 while your laptop shows the tower.'),
     check('Callsign labels', d.labels, (v) => save({ display: { labels: v } }, true)),
+    field('Wingnaut controller size (Omniverse view)', seg([['small', 'Small'], ['medium', 'Medium'], ['large', 'Large'], ['xl', 'XL']], d.controllerSize || 'large', async (v) => { await save({ display: { controllerSize: v } }, true); refreshPanel(); })),
     check('Trails', d.trails, (v) => save({ display: { trails: v } }, true)),
     check('Hide controls and cursor when the mouse is idle', d.kioskHide !== false, (v) => save({ display: { kioskHide: v } }, true)),
     field('Distance units', seg([['nm', 'Nautical miles'], ['mi', 'Statute miles'], ['km', 'Kilometers']], d.units, async (v) => { await save({ display: { units: v } }, true); refreshPanel(); })),
     h('label', { class: 'field' }, h('span', {}, `WW2 sweep speed: one turn every ${d.sweepSeconds} s`), h('input', { type: 'range', min: 3, max: 15, value: d.sweepSeconds, onchange: async (e) => { await save({ display: { sweepSeconds: Number(e.target.value) } }, true); refreshPanel(); } })),
     check('GPS interference overlay (1 API call a day)', s.gps.enabled && d.gpsOverlay, async (v) => { await save({ gps: { enabled: v }, display: { gpsOverlay: v } }, true); }),
-    h('p', { class: 'muted' }, 'Shades areas where aircraft reported poor GPS accuracy. That points to degraded GPS, not necessarily jamming.')));
+    h('p', { class: 'muted' }, 'Shades areas where aircraft reported poor GPS accuracy. That points to degraded GPS, not necessarily jamming. If nothing shows, GPS is healthy around you.')));
 
   // --- Notifications
   const server = h('input', { type: 'url', value: s.ntfy.server });
@@ -470,7 +473,7 @@ async function renderSettings(opts) {
   const wnNote = h('div', {});
   const owned = app.wingnauts || [];
   wrap.append(section('Wingnauts',
-    h('p', { class: 'muted', style: { marginTop: 0 } }, 'Got Wingnauts? Enter the public wallet that holds them and one will take a seat as your radar operator. Read-only: nothing is signed and no keys are needed. The lookup needs a Solana RPC that supports the DAS API, such as a free Helius endpoint.'),
+    h('p', { class: 'muted', style: { marginTop: 0 } }, 'Got Wingnauts? Enter the public wallet that holds them and one will take a seat as your radar controller. Read-only: nothing is signed and no keys are needed. The lookup needs a Solana RPC that supports the DAS API, such as a free Helius endpoint.'),
     field('Wallet address', wallet), field('Solana RPC URL', rpc),
     h('div', { class: 'row' },
       h('button', { class: 'btn primary', onclick: async () => {
@@ -487,12 +490,12 @@ async function renderSettings(opts) {
       } }, 'Look up'),
       owned.length ? h('button', { class: 'btn ghost', onclick: async () => { await api('api/wingnauts', { method: 'DELETE' }); await save({ wingnauts: { wallet: '', rpc: '', operator: null } }, true); await loadOperator(); refreshPanel(); } }, 'Remove') : null),
     wnNote,
-    owned.length ? h('div', { class: 'list', style: { marginTop: '10px' } }, owned.map((w) => h('div', { class: 'item', onclick: async () => { await save({ wingnauts: { operator: w.id } }, true); await loadOperator(); refreshPanel(); app.transmit?.('Reporting for duty.'); } },
+    owned.length ? h('div', { class: 'list', style: { marginTop: '10px' } }, owned.map((w) => h('div', { class: 'item', onclick: async () => { await save({ wingnauts: { operator: w.id } }, true); await loadOperator(); refreshPanel(); app.transmit?.('Controller on frequency. Reporting for duty.'); } },
       h('div', { class: 't', style: { display: 'flex', gap: '10px', alignItems: 'center' } },
         w.local ? h('img', { src: `api/wingnauts/img/${encodeURIComponent(w.id)}`, alt: '', width: 40, height: 40, style: { imageRendering: 'pixelated' } }) : null, w.name),
-      h('div', { class: 'r' }, (app.operator?.id === w.id) ? 'On watch' : 'Choose'),
+      h('div', { class: 'r' }, (app.operator?.id === w.id) ? 'On duty' : 'Choose'),
       h('div', { class: 's' }, w.rarity || '')))) : null,
-    owned.length ? h('p', { class: 'muted' }, 'Your operator shows in the Omniverse view and drops in now and then elsewhere. Wingnauts art belongs to its creators; Skywatch only shows the NFTs your wallet holds.') : null));
+    owned.length ? h('p', { class: 'muted' }, 'Your controller sits in the Omniverse view and flies by now and then elsewhere. Wingnauts art belongs to its creators; Skywatch only shows the NFTs your wallet holds.') : null));
 
   // --- About
   wrap.append(section('About',

@@ -82,7 +82,11 @@ a { color: var(--accent); }
 .tb svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .tb-sep { height: 6px; }
 .badge { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--danger); color: #fff; font: 600 11px/18px system-ui, sans-serif; text-align: center; }
-body.kiosk-idle .toolbar { opacity: 0; pointer-events: none; }
+body.kiosk-idle .toolbar, body.kiosk-idle .shortcuts { opacity: 0; pointer-events: none; }
+.hud-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.shortcuts { display: grid; grid-template-columns: repeat(3, auto); gap: 4px 14px; font-family: var(--font-data); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; transition: opacity .6s; justify-items: end; }
+.shortcuts kbd { display: inline-block; min-width: 18px; padding: 1px 5px; margin-right: 4px; border: 1px solid var(--line); border-radius: var(--radius); font: inherit; color: var(--fg); text-align: center; background: color-mix(in srgb, var(--bg) 70%, transparent); }
+.shortcuts kbd + kbd { margin-left: -2px; }
 body.kiosk-idle .hud-readout { opacity: .7; }
 
 /* ---------- drawer ---------- */
@@ -189,7 +193,7 @@ canvas.chart { width: 100%; height: 130px; display: block; }
 
 @media (max-width: 640px) {
   .brand-title { font-size: 17px; }
-  .hud-readout { display: none; }
+  .hud-readout, .shortcuts { display: none; }
   .hud-bottom { flex-direction: column; align-items: flex-start; }
   .card { top: auto; bottom: 110px; }
   .transmission { bottom: 230px; }

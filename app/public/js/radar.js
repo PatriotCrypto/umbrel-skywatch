@@ -135,7 +135,13 @@ export class Radar {
     return { cx, cy, R, scale, rangeNm, toScreen: (x, y) => [cx + x * scale, cy - y * scale] };
   }
 
+  // Keep the animation alive even if one frame hits a drawing error
   frame(ts) {
+    try { this.draw(); } catch (err) { if (!this.warned) { console.error('radar frame', err); this.warned = true; } }
+    requestAnimationFrame(this.frame);
+  }
+
+  draw() {
     const now = performance.now();
     const ctx = this.ctx;
     const display = this.getDisplay();
@@ -159,7 +165,20 @@ export class Radar {
 
     this.theme.background(r);
     this.theme.grid(r);
-    if (display.heatOverlay && this.heat) this.theme.heat?.(r, this.heat);
+    // runway-lights easter egg: redraw the grid additively so every line glows
+    if (this.lights) {
+      const k = (now - this.lights.t0) / this.lights.ms;
+      if (k >= 1) this.lights = null;
+      else {
+        const glow = this.lights.level * (k < 0.08 ? k / 0.08 : k > 0.75 ? (1 - k) / 0.25 : 1);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const passes = glow > 0.5 ? 3 : glow > 0.15 ? 2 : 1;
+        for (let i = 0; i < passes; i++) { ctx.globalAlpha = Math.min(1, glow * 1.3); this.theme.grid(r); }
+        ctx.restore();
+      }
+    }
+    if (display.heatOverlay && this.heat && this.center) this.theme.heat?.(r, this.heat);
     if (display.gpsOverlay && this.gps?.cells?.length && this.center) this.theme.gps?.(r, this.gps.cells.map((c) => ({ ...c, pts: c.poly.map(([la, lo]) => this.project(la, lo)) })));
 
     const list = [];
@@ -210,7 +229,6 @@ export class Radar {
     this.drawFlyby(r);
     this.theme.foreground(r, list);
     this.visible = list;
-    requestAnimationFrame(this.frame);
   }
 
   // Wingnauts easter egg: now and then a little ship crosses the scope
@@ -234,7 +252,11 @@ export class Radar {
     this.flyby = { t0: performance.now(), dur: 14000, a0, a1: a0 + (Math.random() > 0.5 ? 1 : -1) * 1.2 };
   }
 
+  lightsUp(level, ms) { this.lights = { level, t0: performance.now(), ms }; }
+
   hit(px, py) {
+    const c = this.themeState.controllerRect;
+    if (c && this.theme.name === 'omniverse' && px >= c[0] && px <= c[0] + c[2] && py >= c[1] && py <= c[1] + c[3]) return { controller: true };
     if (this.flyby && Math.hypot(px - this.flyby.x, py - this.flyby.y) < 18) return { flyby: true };
     let best = null; let bd = 22;
     for (const { a } of this.visible || []) {
@@ -255,6 +277,10 @@ export class Radar {
     c.addEventListener('click', (e) => {
       const hit = this.hit(e.clientX, e.clientY);
       this.onSelect(hit);
+    });
+    c.addEventListener('mousemove', (e) => {
+      const hit = this.hit(e.clientX, e.clientY);
+      c.style.cursor = hit ? 'pointer' : '';
     });
     c.addEventListener('wheel', (e) => { e.preventDefault(); this.zoom(e.deltaY > 0 ? 1.12 : 1 / 1.12); }, { passive: false });
     let pinch = null;

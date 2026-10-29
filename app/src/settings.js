@@ -21,7 +21,7 @@ export const DEFAULTS = {
   },
   display: {
     theme: 'ww2', labels: true, trails: true, units: 'nm', sweepSeconds: 8,
-    kioskHide: true, gpsOverlay: false, heatOverlay: false,
+    kioskHide: true, gpsOverlay: false, heatOverlay: false, controllerSize: 'large',
   },
   gps: { enabled: false },
   ntfy: { server: 'https://ntfy.sh', topic: '', token: '' },
@@ -100,6 +100,7 @@ function validate(s) {
   d.theme = ['ww2', 'tower', 'space', 'omniverse'].includes(d.theme) ? d.theme : 'ww2';
   d.units = ['nm', 'mi', 'km'].includes(d.units) ? d.units : 'nm';
   d.sweepSeconds = num(d.sweepSeconds, 2, 20, 8);
+  d.controllerSize = ['small', 'medium', 'large', 'xl'].includes(d.controllerSize) ? d.controllerSize : 'large';
   s.watchlist = (Array.isArray(s.watchlist) ? s.watchlist : []).slice(0, 50).map((w) => ({
     query: String(w.query || '').trim().toUpperCase().slice(0, 15),
     label: String(w.label || '').slice(0, 40),

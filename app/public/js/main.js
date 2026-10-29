@@ -13,6 +13,7 @@ store('viewer', viewerId);
 
 const radar = new Radar($('#radar'), {
   onSelect: (hit) => {
+    if (hit?.controller) return controllerClick();
     if (hit?.flyby) return showOperatorCard();
     select(hit?.hex || null);
   },
@@ -37,6 +38,7 @@ async function boot() {
   renderHud();
   loadOperator();
   loadHeat().catch(() => {});
+  setInterval(() => loadHeat().catch(() => {}), 5 * 60000);
   if (needsSetup() && !store('welcomed')) { store('welcomed', true); openPanel('settings', { welcome: true }); }
 }
 
@@ -240,10 +242,46 @@ export async function loadOperator() {
   radar.operator = app.operator;
 }
 
+// Things the controller says when you click the ship that flies by
+const CHATTER = [
+  'All quiet on this sector… mostly.',
+  'Traffic, traffic. Oh wait, that was a seagull.',
+  'Skywatch, controller here. Scopes are clean, coffee is not.',
+  'Keep your eyes on the sweep. I have seen things out past the last ring.',
+  'Squawk 1200 and enjoy the view.',
+  'Spotted a balloon earlier. Still not sure it was weather-related.',
+  'Ten thousand feet, clear skies, and nobody asked me for a vector today.',
+  'Every blip has a story. Most of them are going to Chicago.',
+  'Request: one more radar ring. Denied. Budget says no.',
+  'Reminder: the static between signals is where the good stuff hides.',
+  'If you hear a tone on frequency, that was me. Sorry.',
+  'Logging contacts, counting sats, watching the sky. Standard shift.',
+  'Bandit at your six! Kidding. It is a Cessna.',
+  'Hold short. I am finishing my flight plan for the next galaxy over.',
+  'Fuel state: plenty. Patience state: also plenty. Carry on.',
+];
+let lastChatter = -1;
 function showOperatorCard() {
   const op = app.operator;
   if (!op) return;
-  transmit(`${op.name} reporting. All quiet on this sector… mostly.`);
+  let i;
+  do { i = Math.floor(Math.random() * CHATTER.length); } while (CHATTER.length > 1 && i === lastChatter);
+  lastChatter = i;
+  transmit(CHATTER[i]);
+}
+
+// Pilot-controlled lighting: click the controller 3, 5 or 7 times quickly,
+// like keying the mic on the CTAF, and the scope lights up.
+let clicks = 0; let clickTimer;
+function controllerClick() {
+  clicks++;
+  clearTimeout(clickTimer);
+  clickTimer = setTimeout(() => {
+    const n = clicks; clicks = 0;
+    if (n >= 7) { radar.lightsUp(1, 7000); transmit('Seven clicks. Lights on full. Cleared to land!'); }
+    else if (n >= 5) { radar.lightsUp(0.6, 5000); transmit('Five clicks, medium intensity. Try seven.'); }
+    else if (n >= 3) { radar.lightsUp(0.3, 4000); }
+  }, 1200);
 }
 
 let transTimer;
@@ -252,6 +290,10 @@ function transmit(text) {
   if (!op) return;
   const t = $('#transmission');
   t.replaceChildren(h('b', {}, `◆ ${op.name}${op.rarity ? ' · ' + op.rarity : ''}`), text);
+  // speak from beside the controller portrait when it is on screen
+  const c = radar.themeState.controllerRect;
+  if (c && currentTheme() === 'omniverse') { t.style.left = `${c[0] + c[2] + 14}px`; t.style.top = `${c[1]}px`; t.style.bottom = 'auto'; }
+  else { t.style.left = ''; t.style.top = ''; t.style.bottom = ''; }
   t.hidden = false;
   clearTimeout(transTimer);
   transTimer = setTimeout(() => { t.hidden = true; }, 9000);
@@ -302,7 +344,7 @@ window.addEventListener('keydown', (e) => {
     kpos = 0;
     setTheme('omniverse');
     if (app.operator) { radar.startFlyby(); transmit('You found the back door. Welcome to the Omniverse.'); }
-    else toast({ title: 'Omniverse unlocked', message: 'Add your Wingnauts in Settings to put one on watch.' });
+    else toast({ title: 'Omniverse unlocked', message: 'Add your Wingnauts in Settings to put one on duty as controller.' });
     return;
   }
   if (e.target.closest('input, textarea, select')) return;

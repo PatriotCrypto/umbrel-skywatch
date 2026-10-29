@@ -23,18 +23,42 @@ function clipScope(r) {
   r.ctx.clip();
 }
 
+// The heatmap is drawn once into an offscreen canvas and reused every frame
+// until the data, zoom, size or theme changes.
 function heatCells(r, cells, color) {
-  const { ctx } = r;
-  const max = Math.max(1, ...cells.slice(0, 50).map((c) => c.n));
-  const cell = 0.02 * 60 * r.scale;
-  clipScope(r);
-  for (const c of cells) {
-    const p = r.radar.project(c.lat, c.lon);
-    const [x, y] = r.toScreen(p.x, p.y);
-    const a = Math.min(0.55, (Math.log(1 + c.n) / Math.log(1 + max)) * 0.55);
-    ctx.fillStyle = color(a);
-    ctx.fillRect(x - cell / 2, y - cell / 2, cell + 0.5, cell + 0.5);
+  if (!cells.length) return;
+  const { ctx, state, radar } = r;
+  const key = `${cells.length}:${cells[0].n}:${r.rangeNm.toFixed(2)}:${r.w}x${r.h}:${radar.theme.name}:${radar.center?.lat},${radar.center?.lon}`;
+  if (!state.heat || state.heat.key !== key) {
+    const dpr = radar.dpr || 1;
+    const off = document.createElement('canvas');
+    off.width = Math.round(r.w * dpr); off.height = Math.round(r.h * dpr);
+    const g2 = off.getContext('2d');
+    g2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g2.beginPath(); g2.arc(r.cx, r.cy, r.R, 0, TAU); g2.clip();
+    g2.globalCompositeOperation = 'lighter';
+    const max = Math.max(1, cells[0].n);
+    const rad = Math.max(6, 0.02 * 60 * r.scale * 1.1);
+    // one shared gradient sprite, stamped with varying alpha
+    const spr = document.createElement('canvas');
+    const sz = Math.ceil(rad * 2 * dpr);
+    spr.width = spr.height = Math.max(2, sz);
+    const sg = spr.getContext('2d');
+    const grad = sg.createRadialGradient(sz / 2, sz / 2, 0, sz / 2, sz / 2, sz / 2);
+    grad.addColorStop(0, color(1)); grad.addColorStop(1, color(0));
+    sg.fillStyle = grad; sg.fillRect(0, 0, sz, sz);
+    for (const c of cells) {
+      const p = radar.project(c.lat, c.lon);
+      const [x, y] = r.toScreen(p.x, p.y);
+      if (x < -rad || y < -rad || x > r.w + rad || y > r.h + rad) continue;
+      g2.globalAlpha = 0.08 + (Math.log(1 + c.n) / Math.log(1 + max)) * 0.4;
+      g2.drawImage(spr, x - rad, y - rad, rad * 2, rad * 2);
+    }
+    state.heat = { key, canvas: off };
   }
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(state.heat.canvas, 0, 0);
   ctx.restore();
 }
 
@@ -108,7 +132,7 @@ const ww2 = {
     ctx.strokeStyle = 'rgba(109,255,109,0.7)';
     ctx.beginPath(); ctx.moveTo(cx - 6, cy); ctx.lineTo(cx + 6, cy); ctx.moveTo(cx, cy - 6); ctx.lineTo(cx, cy + 6); ctx.stroke();
   },
-  heat(r, cells) { heatCells(r, cells, (a) => `rgba(109,255,109,${a * 0.6})`); },
+  heat(r, cells) { heatCells(r, cells, (a) => `rgba(109,255,109,${a})`); },
   gps(r, cells) { gpsCells(r, cells, 'rgba(255,179,71,0.5)', (s) => `rgba(255,179,71,${0.08 + s * 0.12})`); },
   trail() {},
   track(r, pts) {
@@ -259,7 +283,7 @@ const tower = {
     ctx.strokeStyle = '#3fd0ff';
     ctx.beginPath(); ctx.arc(cx, cy, 4, 0, TAU); ctx.stroke();
   },
-  heat(r, cells) { heatCells(r, cells, (a) => `rgba(63,208,255,${a * 0.5})`); },
+  heat(r, cells) { heatCells(r, cells, (a) => `rgba(63,208,255,${a * 0.8})`); },
   gps(r, cells) { gpsCells(r, cells, 'rgba(245,215,110,0.55)', (s) => `rgba(245,215,110,${0.05 + s * 0.12})`); },
   trail(r, { a, alpha }) {
     const { ctx } = r;
@@ -317,10 +341,7 @@ const tower = {
     ctx.fillStyle = 'rgba(150,180,200,0.35)';
     ctx.font = '11px "Share Tech Mono", monospace';
     ctx.textAlign = 'left';
-    ctx.fillText(`RNG ${Math.round(r.rangeNm)} NM`, 18, h - 96);
-    ctx.textAlign = 'right';
-    ctx.fillText('TRUE NORTH UP', w - 18, h - 96);
-    ctx.textAlign = 'left';
+    ctx.fillText(`RNG ${Math.round(r.rangeNm)} NM · TRUE NORTH UP`, 18, h - 96);
   },
   flyby(r, x, y, ang) { pixelShip(r.ctx, x, y, ang, 2, ['#f5d76e', '#3fd0ff']); },
 };
@@ -386,7 +407,7 @@ const space = {
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(cx, cy, 6, 0, TAU); ctx.moveTo(cx - 14, cy); ctx.lineTo(cx - 8, cy); ctx.moveTo(cx + 8, cy); ctx.lineTo(cx + 14, cy); ctx.stroke();
   },
-  heat(r, cells) { heatCells(r, cells, (a) => `rgba(255,79,216,${a * 0.5})`); },
+  heat(r, cells) { heatCells(r, cells, (a) => `rgba(255,79,216,${a * 0.8})`); },
   gps(r, cells) { gpsCells(r, cells, 'rgba(255,211,79,0.65)', (s) => `rgba(255,211,79,${0.05 + s * 0.14})`); },
   trail(r, { a, alpha }) {
     const { ctx } = r;
@@ -555,7 +576,7 @@ const omniverse = {
     ctx.fillStyle = OMNI.orange; ctx.fillRect(cx - 3, cy - 3, 6, 6);
     ctx.fillStyle = OMNI.cream; ctx.fillRect(cx - 1, cy - 1, 2, 2);
   },
-  heat(r, cells) { heatCells(r, cells, (a) => `rgba(242,107,29,${a * 0.55})`); },
+  heat(r, cells) { heatCells(r, cells, (a) => `rgba(242,107,29,${a * 0.85})`); },
   gps(r, cells) { gpsCells(r, cells, 'rgba(232,74,95,0.7)', (s) => `rgba(232,74,95,${0.06 + s * 0.14})`); },
   trail(r, { a, alpha }) {
     const { ctx } = r;
@@ -617,13 +638,16 @@ const omniverse = {
     // chunky frame
     ctx.fillStyle = OMNI.ink;
     ctx.fillRect(0, 0, w, 4); ctx.fillRect(0, h - 4, w, 4); ctx.fillRect(0, 0, 4, h); ctx.fillRect(w - 4, 0, 4, h);
-    // operator portrait
+    // Wingnaut controller portrait
     const op = radar.operator;
-    const size = Math.max(84, Math.min(128, Math.min(w, h) * 0.13));
-    const x = 22; const y = h - size - 136;
-    if (y < 120) return;
-    ctx.fillStyle = OMNI.ink; ctx.fillRect(x - 4, y - 4, size + 8, size + 34);
-    ctx.fillStyle = op?.rarityColor || OMNI.teal; ctx.fillRect(x - 2, y - 2, size + 4, size + 4);
+    const want = { small: 96, medium: 160, large: 240, xl: 340 }[r.display.controllerSize || 'large'] || 240;
+    const size = Math.round(Math.max(72, Math.min(want, h - 300, w * 0.32)));
+    const x = 22; const y = h - size - 140;
+    if (y < 90) { r.state.controllerRect = null; return; }
+    r.state.controllerRect = [x - 4, y - 4, size + 8, size + 44];
+    const border = op?.rarityColor || OMNI.teal;
+    ctx.fillStyle = OMNI.ink; ctx.fillRect(x - 6, y - 6, size + 12, size + 48);
+    ctx.fillStyle = border; ctx.fillRect(x - 3, y - 3, size + 6, size + 6);
     ctx.fillStyle = OMNI.ink; ctx.fillRect(x, y, size, size);
     if (op?.img?.complete && op.img.naturalWidth) {
       ctx.imageSmoothingEnabled = false;
@@ -636,11 +660,13 @@ const omniverse = {
       for (const [i, j] of [[3, 3], [4, 3], [5, 3], [6, 3], [7, 3], [2, 4], [8, 4], [2, 5], [8, 5], [3, 6], [7, 6], [4, 7], [5, 7], [6, 7], [5, 8], [5, 9], [4, 9], [6, 9]]) ctx.fillRect(x + i * s, y + j * s, s, s);
       ctx.fillStyle = OMNI.orange; ctx.fillRect(x + 5 * s, y + 5 * s, s, s);
     }
-    ctx.font = '10px Silkscreen, monospace';
+    const fs = size >= 200 ? 13 : 10;
+    ctx.font = `${fs}px Silkscreen, monospace`;
     ctx.fillStyle = OMNI.cream;
-    ctx.fillText(op ? `OPERATOR ${String(op.name || '').replace(/^wingnaut\s*/i, '').trim() || ''}` : 'NO OPERATOR', x, y + size + 14);
-    ctx.fillStyle = op?.rarityColor || 'rgba(246,231,207,0.55)';
-    ctx.fillText(op ? (op.rarity || 'WINGNAUT').toUpperCase() : 'ADD ONE IN SETTINGS', x, y + size + 26);
+    const num = op ? String(op.name || '').replace(/^wingnaut\s*/i, '').trim() : '';
+    ctx.fillText(op ? `CONTROLLER ${num}` : 'NO CONTROLLER', x, y + size + fs + 6);
+    ctx.fillStyle = op ? border : 'rgba(246,231,207,0.55)';
+    ctx.fillText(op ? (op.rarity || 'WINGNAUT').toUpperCase() : 'ADD ONE IN SETTINGS', x, y + size + fs * 2 + 10);
   },
   flyby(r, x, y, ang) { pixelShip(r.ctx, x, y, ang, 3, [OMNI.orange, OMNI.cream]); },
 };
@@ -650,6 +676,6 @@ export const THEME_META = {
   ww2: { title: 'WW2 plot room', sub: 'Phosphor scope with a rotating sweep', brand: 'SKYWATCH', tagline: 'Chain Home · plot room', swatch: ['#030703', '#6dff6d', '#ffb347'] },
   tower: { title: 'Control tower', sub: 'Approach scope, data blocks, leader lines', brand: 'SKYWATCH APP', tagline: 'Approach control', swatch: ['#0a0f14', '#e8f4fa', '#3fd0ff'] },
   space: { title: 'Deep field', sub: 'Holographic station scope with altitude stalks', brand: 'SKYWATCH//DEEP FIELD', tagline: 'Orbital tracking array', swatch: ['#03030a', '#59f3ff', '#ff4fd8'] },
-  omniverse: { title: 'Omniverse', sub: 'Pixel starscape with your Wingnaut on watch', brand: 'SKYWATCH OMNIVERSE', tagline: 'Signals from the static', swatch: ['#121e28', '#f26b1d', '#33d1c1'] },
+  omniverse: { title: 'Omniverse', sub: 'Pixel starscape with your Wingnaut as controller', brand: 'SKYWATCH OMNIVERSE', tagline: 'Signals from the static', swatch: ['#121e28', '#f26b1d', '#33d1c1'] },
 };
 export const RARITY_COLORS = { common: '#33d1c1', uncommon: '#f26b1d', rare: '#3d7bff', epic: '#9b5de5', legendary: '#ffd166', mythic: '#e84a5f' };

@@ -36,7 +36,8 @@ Put it full screen on a spare monitor and leave it running.
 - **GPS interference overlay.** Optional, one API call a day, from `/v1/gps/jam`.
 - **Wingnauts.** Enter the public Solana wallet that holds your Wingnauts and one becomes
   your radar operator in the Omniverse view (and drops by elsewhere now and then).
-  Read-only: nothing is signed. Try the Konami code.
+  Read-only: nothing is signed. Its size is adjustable from Small to XL.
+  Try the Konami code, and if you know how pilot-controlled runway lights work, try that on the controller.
 
 ## Install
 
