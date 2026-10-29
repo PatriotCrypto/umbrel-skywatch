@@ -304,6 +304,7 @@ export class Engine {
     for (const h of batch) this.detailsQueue.delete(h);
     const snap = this.tracker.snapshot({ withTrails: s.display.trails });
     this.alerter.evaluate(snap, { newTypes });
+    if (newTypes.length) this.broadcast('newtype', newTypes.map((t) => ({ typecode: t.typecode, label: t.label })));
     this.broadcast('snapshot', this.snapshotPayload(snap));
     return true;
   }

@@ -1,5 +1,6 @@
 import { $, h, api, fmtAlt, fmtDist, fmtNum, fmtDur, fmtAgo, fmtWhen, cardinal, store } from './util.js';
 import { THEME_META } from './themes.js';
+import { soundPrefs, saveSoundPrefs, preview as previewSound } from './audio.js';
 import { computeBudget } from './budget.js';
 import { app, applyTheme, setTheme, currentTheme, toast, clearAlertBadge, loadOperator, renderHud } from './main.js';
 
@@ -452,6 +453,21 @@ async function renderSettings(opts) {
     h('label', { class: 'field' }, h('span', {}, `WW2 sweep speed: one turn every ${d.sweepSeconds} s`), h('input', { type: 'range', min: 3, max: 15, value: d.sweepSeconds, onchange: async (e) => { await save({ display: { sweepSeconds: Number(e.target.value) } }, true); refreshPanel(); } })),
     check('GPS interference overlay (1 API call a day)', s.gps.enabled && d.gpsOverlay, async (v) => { await save({ gps: { enabled: v }, display: { gpsOverlay: v } }, true); }),
     h('p', { class: 'muted' }, 'Shades areas where aircraft reported poor GPS accuracy. That points to degraded GPS, not necessarily jamming. If nothing shows, GPS is healthy around you.')));
+
+  // --- Sound (per screen, Omniverse view only)
+  const sp = soundPrefs();
+  const sp_save = (patch) => saveSoundPrefs(patch);
+  const vol = h('input', { type: 'range', min: 0.05, max: 1, step: 0.05, value: sp.vol, oninput: (e) => sp_save({ vol: Number(e.target.value) }), onchange: () => previewSound() });
+  wrap.append(section('Sound (Omniverse view)',
+    h('p', { class: 'muted' }, 'Radio calls, runway-light clicks, the Big Bang and more, only in the Omniverse view. Saved on this screen only, so the living room PC can play sound while your laptop stays quiet. Browsers need one click or key press after loading before they allow sound.'),
+    check('Sound on', sp.on, async (v) => { sp_save({ on: v }); if (v) previewSound(); refreshPanel(); }),
+    sp.on ? h('div', {},
+      h('label', { class: 'field' }, h('span', {}, 'Volume'), vol),
+      check('Controller: mic clicks, radio calls, runway lights, Big Bang', sp.controller, (v) => sp_save({ controller: v })),
+      check('Spaceship flyby and zap', sp.ship, (v) => sp_save({ ship: v })),
+      check('Radar: new contact ping, new type chime, emergency squawk alert', sp.radar, (v) => sp_save({ radar: v })),
+      check('Quiet ambient hum', sp.ambient, (v) => sp_save({ ambient: v })),
+      h('p', { class: 'muted' }, 'Sound also stays off during your quiet hours.')) : null));
 
   // --- Notifications
   const server = h('input', { type: 'url', value: s.ntfy.server });

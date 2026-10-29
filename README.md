@@ -37,6 +37,7 @@ Put it full screen on a spare monitor and leave it running.
 - **Wingnauts.** Enter the public Solana wallet that holds your Wingnauts and one becomes
   your radar operator in the Omniverse view (and drops by elsewhere now and then).
   Read-only: nothing is signed. Its size is adjustable from Small to XL.
+  Optional sound effects (off by default, per screen, Omniverse view only): radio calls, mic clicks, the spaceship, new-contact pings and a Big Bang.
   Try the Konami code, and if you know how pilot-controlled runway lights work, try that on the controller.
 
 ## Install

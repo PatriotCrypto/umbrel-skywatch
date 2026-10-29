@@ -6,9 +6,11 @@ const DEG = Math.PI / 180;
 const BLEND_MS = 1800;
 const GONE_FADE_MS = 25000;
 const MAX_COAST_S = 300;
+const EMG = new Set(['7500', '7600', '7700']);
 
 export class Radar {
-  constructor(canvas, { onSelect, getDisplay }) {
+  constructor(canvas, { onSelect, getDisplay, onFlyby, onContact }) {
+    this.opts = { onFlyby, onContact };
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.onSelect = onSelect;
@@ -74,9 +76,12 @@ export class Radar {
     if (p.intervalSec) this.intervalSec = p.intervalSec;
     if (!this.center) return;
     const seen = new Set();
+    const first = this.aircraft.size === 0;
     for (const d of p.aircraft) {
       seen.add(d.h);
       const prev = this.aircraft.get(d.h);
+      if (!first && !prev) this.opts.onContact?.(d);
+      else if (prev && !EMG.has(prev.d.sq) && EMG.has(d.sq)) this.opts.onContact?.(d, true);
       const base = this.project(d.la, d.lo);
       const rec = { d, base, trail: (d.trail || []).map(([la, lo, ab]) => ({ ...this.project(la, lo), ab })), corr: null, paint: prev?.paint || null, gone: null, born: prev?.born || now };
       if (prev && !prev.gone) {
@@ -260,6 +265,7 @@ export class Radar {
     this.nextFlyby = performance.now() + 120000 + Math.random() * 180000;
     const a0 = Math.random() * Math.PI * 2;
     this.flyby = { t0: performance.now(), dur: 14000, a0, a1: a0 + (Math.random() > 0.5 ? 1 : -1) * 1.2 };
+    this.opts.onFlyby?.(this.flyby);
   }
 
   lightsUp(level, ms) { this.lights = { level, t0: performance.now(), ms }; }

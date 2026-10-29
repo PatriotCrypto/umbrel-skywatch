@@ -2,6 +2,7 @@ import { Radar } from './radar.js';
 import { THEME_META, RARITY_COLORS } from './themes.js';
 import { $, h, api, store, fmtAlt, fmtDist, fmtNum, fmtDur, fmtAgo, fmtWhen, cardinal, label } from './util.js';
 import { openPanel, refreshPanel, currentPanel, loadHeat } from './panels.js';
+import * as snd from './audio.js';
 
 export const app = {
   settings: null, status: null, snapshot: null, ruleTypes: {}, categories: {}, version: '',
@@ -14,9 +15,11 @@ store('viewer', viewerId);
 const radar = new Radar($('#radar'), {
   onSelect: (hit) => {
     if (hit?.controller) return controllerClick();
-    if (hit?.flyby) return showOperatorCard();
+    if (hit?.flyby) { snd.zap(); return showOperatorCard(); }
     select(hit?.hex || null);
   },
+  onFlyby: (f) => snd.flybyWhoosh(f.dur, Math.cos(f.a0) * 0.8, Math.cos(f.a1) * 0.8),
+  onContact: (d, emergency) => { if (emergency) snd.alarm(); else snd.ping(false); },
   getDisplay: () => ({ ...(app.settings?.display || {}), ...(store('display') || {}) }),
 });
 app.radar = radar;
@@ -27,6 +30,7 @@ async function boot() {
   const s = await api('api/state');
   app.settings = s.settings; app.status = s.status; app.version = s.version;
   app.ruleTypes = s.ruleTypes; app.categories = s.categories;
+  snd.initAudio({ isOmniverse: () => currentTheme() === 'omniverse', isQuiet: inQuiet });
   applyTheme(currentTheme());
   const saved = store('range');
   if (saved) radar.rangeNm = saved;
@@ -40,6 +44,17 @@ async function boot() {
   loadHeat().catch(() => {});
   setInterval(() => loadHeat().catch(() => {}), 5 * 60000);
   if (needsSetup() && !store('welcomed')) { store('welcomed', true); openPanel('settings', { welcome: true }); }
+}
+
+// Sound stays off during the same quiet hours that slow the polling
+function inQuiet() {
+  const q = app.settings?.budget?.quiet;
+  if (!q?.enabled) return false;
+  const [sh, sm] = String(q.start).split(':').map(Number); const [eh, em] = String(q.end).split(':').map(Number);
+  const d = new Date(); const m = d.getHours() * 60 + d.getMinutes();
+  const a = sh * 60 + sm; const b = eh * 60 + em;
+  if (a === b) return false;
+  return a < b ? m >= a && m < b : m >= a || m < b;
 }
 
 function needsSetup() {
@@ -62,6 +77,7 @@ function connect() {
   es.addEventListener('gps', (e) => { radar.gps = JSON.parse(e.data); });
   es.addEventListener('watch', () => { if (currentPanel() === 'watch') refreshPanel(); });
   es.addEventListener('alert', (e) => onAlert(JSON.parse(e.data)));
+  es.addEventListener('newtype', () => snd.levelUp());
   es.onopen = () => banner(null);
   es.onerror = () => banner('Lost connection to the radar. Reconnecting…');
 }
@@ -77,6 +93,7 @@ export function currentTheme() { return store('theme') || app.settings?.display.
 export function applyTheme(name) {
   document.documentElement.dataset.theme = name;
   radar.setTheme(name);
+  snd.syncAmbient();
   const meta = THEME_META[name];
   $('#brandTitle').textContent = meta.brand;
   document.querySelector('meta[name=theme-color]').setAttribute('content', meta.swatch[0]);
@@ -286,13 +303,14 @@ function showOperatorCard() {
 let clicks = 0; let clickTimer;
 function controllerClick() {
   clicks++;
+  snd.keyClick();
   clearTimeout(clickTimer);
   clickTimer = setTimeout(() => {
     const n = clicks; clicks = 0;
     if (n <= 2) { showOperatorCard(); return; }
-    if (n >= 7) { radar.bigBang(); setTimeout(() => transmit('Seven clicks. Every light in the known universe is on. Cleared to land.'), 1400); }
-    else if (n >= 5) { radar.lightsUp(0.6, 5000); transmit('Five clicks, medium intensity. Try seven.'); }
-    else if (n >= 3) { radar.lightsUp(0.3, 4000); }
+    if (n >= 7) { radar.bigBang(); snd.bigBang(); setTimeout(() => transmit('Seven clicks. Every light in the known universe is on. Cleared to land.'), 1400); }
+    else if (n >= 5) { radar.lightsUp(0.6, 5000); snd.powerUp(); transmit('Five clicks, medium intensity. Try seven.'); }
+    else if (n >= 3) { radar.lightsUp(0.3, 4000); snd.lightsRelay(); }
   }, 1200);
 }
 
@@ -307,6 +325,7 @@ function transmit(text) {
   if (c && currentTheme() === 'omniverse') { t.style.left = `${c[0] + c[2] + 14}px`; t.style.top = `${c[1]}px`; t.style.bottom = 'auto'; }
   else { t.style.left = ''; t.style.top = ''; t.style.bottom = ''; }
   t.hidden = false;
+  snd.transmission(text.length);
   clearTimeout(transTimer);
   transTimer = setTimeout(() => { t.hidden = true; }, 9000);
 }
@@ -355,6 +374,7 @@ window.addEventListener('keydown', (e) => {
   if (kpos === KONAMI.length) {
     kpos = 0;
     setTheme('omniverse');
+    snd.jingle();
     if (app.operator) { radar.startFlyby(); transmit('You found the back door. Welcome to the Omniverse.'); }
     else toast({ title: 'Omniverse unlocked', message: 'Add your Wingnauts in Settings to put one on duty as controller.' });
     return;
