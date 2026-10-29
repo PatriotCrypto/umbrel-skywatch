@@ -108,7 +108,8 @@ function renderHud() {
   const clock = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
   const z = `${String(now.getUTCHours()).padStart(2, '0')}${String(now.getUTCMinutes()).padStart(2, '0')}Z`;
   const count = app.snapshot?.aircraft?.length ?? 0;
-  $('#readout').innerHTML = `<b>${clock}</b> · ${z}<br><b>${count}</b> contacts · ${fmtDist(st.radiusNm, units, 0)} radius`;
+  const date = now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  $('#readout').innerHTML = `<div class="clock">${clock}</div><div class="date">${date} · ${z}</div><div><b>${count}</b> contacts · ${fmtDist(st.radiusNm, units, 0)} radius</div>`;
 
   const b = st.budget || {};
   const parts = [];
@@ -125,6 +126,8 @@ function renderHud() {
     parts.push(`${st.demo ? 'Demo quota' : st.plan.name || 'Plan'} · <b>${fmtNum(st.plan.monthlyRemaining)}</b> of ${fmtNum(st.plan.monthlyLimit)} calls left · ${fmtNum(st.today.total)} today`);
   }
   $('#budgetHud').innerHTML = parts.join('<br>');
+  // problems stay on screen even when the controls fade away
+  $('#budgetHud').classList.toggle('has-alert', Boolean(st.error || st.needsHome || b.state === 'paused'));
 }
 
 // ---------- selection + aircraft card ----------
