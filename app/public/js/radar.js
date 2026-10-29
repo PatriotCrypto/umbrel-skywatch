@@ -242,7 +242,9 @@ export class Radar {
   drawFlyby(r) {
     if (!this.operator) return;
     const now = r.now;
-    if (!this.flyby && Math.random() < 1 / (60 * 60 * 12)) this.startFlyby();
+    // a ship crosses every 2 to 5 minutes
+    if (!this.nextFlyby) this.nextFlyby = now + 30000 + Math.random() * 60000;
+    if (!this.flyby && now >= this.nextFlyby) this.startFlyby();
     const f = this.flyby;
     if (!f) return;
     const k = (now - f.t0) / f.dur;
@@ -255,6 +257,7 @@ export class Radar {
   }
 
   startFlyby() {
+    this.nextFlyby = performance.now() + 120000 + Math.random() * 180000;
     const a0 = Math.random() * Math.PI * 2;
     this.flyby = { t0: performance.now(), dur: 14000, a0, a1: a0 + (Math.random() > 0.5 ? 1 : -1) * 1.2 };
   }

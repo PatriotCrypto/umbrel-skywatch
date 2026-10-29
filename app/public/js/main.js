@@ -262,6 +262,16 @@ const CHATTER = [
   'Bandit at your six! Kidding. It is a Cessna.',
   'Hold short. I am finishing my flight plan for the next galaxy over.',
   'Fuel state: plenty. Patience state: also plenty. Carry on.',
+  'Say again? I was watching the heavies go by.',
+  'Ground is quiet. Upstairs is busy. Just how I like it.',
+  'Somebody down there just squawked the wrong code. Not naming names.',
+  'Your radar, my rules: no buzzing the house.',
+  'Wind is out of the west, mostly. The Omniverse is out of everywhere.',
+  'I have been on shift since the last reset. Coffee is the only thing keeping me in orbit.',
+  'That heavy at flight level three-eight is my favorite. Do not tell the others.',
+  'Click me seven times. I dare you.',
+  'Roger that. Wilco. Over. Out. I just like saying them.',
+  'If it flies, I log it. If it hovers, I log it twice.',
 ];
 let lastChatter = -1;
 function showOperatorCard() {
@@ -281,6 +291,7 @@ function controllerClick() {
   clearTimeout(clickTimer);
   clickTimer = setTimeout(() => {
     const n = clicks; clicks = 0;
+    if (n <= 2) { showOperatorCard(); return; }
     if (n >= 7) { radar.bigBang(); setTimeout(() => transmit('Seven clicks. Every light in the known universe is on. Cleared to land.'), 1400); }
     else if (n >= 5) { radar.lightsUp(0.6, 5000); transmit('Five clicks, medium intensity. Try seven.'); }
     else if (n >= 3) { radar.lightsUp(0.3, 4000); }
