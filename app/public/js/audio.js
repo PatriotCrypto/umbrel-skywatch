@@ -390,6 +390,30 @@ export function bugle() {
     return at + d + 0.03;
   }, 0);
 }
+let sirenNodes = null;
+/** Air raid siren: a rising and falling wail over a low drone of engines */
+export function siren(durSec = 15) {
+  if (!can('ww2')) return;
+  stopSiren();
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator(); const f = ctx.createBiquadFilter(); const g = ctx.createGain();
+  o.type = 'sawtooth'; f.type = 'lowpass'; f.frequency.value = 1500;
+  o.frequency.setValueAtTime(380, t);
+  for (let i = 0; i < Math.ceil(durSec / 4); i++) { o.frequency.linearRampToValueAtTime(860, t + i * 4 + 2); o.frequency.linearRampToValueAtTime(380, t + i * 4 + 4); }
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.1, t + 0.5); g.gain.setValueAtTime(0.1, t + durSec - 1.5); g.gain.linearRampToValueAtTime(0.0001, t + durSec);
+  o.connect(f); f.connect(g); g.connect(master); o.start(t); o.stop(t + durSec + 0.1);
+  const d1 = ctx.createOscillator(); const d2 = ctx.createOscillator(); const dg = ctx.createGain();
+  d1.type = 'sawtooth'; d2.type = 'sawtooth'; d1.frequency.value = 54; d2.frequency.value = 57.5;
+  dg.gain.setValueAtTime(0.0001, t); dg.gain.linearRampToValueAtTime(0.1, t + durSec * 0.7); dg.gain.linearRampToValueAtTime(0.0001, t + durSec);
+  const df = ctx.createBiquadFilter(); df.type = 'lowpass'; df.frequency.value = 220;
+  d1.connect(df); d2.connect(df); df.connect(dg); dg.connect(master); d1.start(t); d2.start(t); d1.stop(t + durSec + 0.1); d2.stop(t + durSec + 0.1);
+  sirenNodes = [o, d1, d2];
+}
+export function stopSiren() {
+  if (!sirenNodes) return;
+  for (const n of sirenNodes) { try { n.stop(); } catch { /* already stopped */ } }
+  sirenNodes = null;
+}
 export function bell() {
   if (!can('ww2')) return;
   tone({ f: 1760, dur: 1.1, type: 'sine', vol: 0.12 });

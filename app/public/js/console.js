@@ -115,11 +115,12 @@ function selector(key, label, options, { get, set }) {
 function toggle(key, label, { get, set }) {
   const btn = h('button', { class: 'toggle', type: 'button', role: 'switch', 'aria-label': label, title: label });
   btn.innerHTML = '<span class="nut"><span class="well"><i class="lever"></i></span></span>';
-  const draw = () => { const on = !!get(); btn.classList.toggle('on', on); btn.setAttribute('aria-checked', String(on)); };
+  const pos = h('div', { class: 'tpos' }, h('span', { class: 'o' }, 'OFF'), h('span', { class: 'i' }, 'ON'));
+  const draw = () => { const on = !!get(); btn.classList.toggle('on', on); pos.classList.toggle('lit', on); btn.setAttribute('aria-checked', String(on)); };
   btn.addEventListener('click', () => { snd.clunk(!get()); set(!get()); draw(); });
   refs.toggles[key] = { draw };
   draw();
-  return h('div', { class: 'toggle-cell' }, h('div', { class: 'engrave tiny top' }, 'ON'), btn, h('div', { class: 'engrave' }, label));
+  return h('div', { class: 'toggle-cell' }, pos, btn, h('div', { class: 'engrave' }, label));
 }
 
 // ---------- lit push button (square lens with a legend) ----------
@@ -202,6 +203,14 @@ const CHART_ORDER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('');
 const CODE_OF = Object.fromEntries(Object.entries(MORSE).map(([k, v]) => [v, k]));
 const dd = (c) => c.replace(/\./g, '·').replace(/-/g, '−');
 
+/** Close any pop-ups that belong to the console (chart, telegram, flag, air raid) */
+export function closeOverlays() {
+  for (const id of ['morsechart', 'telegram', 'flag']) $('#' + id)?.remove();
+  $('#transmission') && ($('#transmission').hidden = true);
+  clearTimeout(telTimer); clearTimeout(flagTimer);
+  endRaid();
+}
+
 /** Morse cheat sheet: a little card over the scope */
 export function morseChart() {
   const old = $('#morsechart');
@@ -219,6 +228,17 @@ export function morseChart() {
 
 const STAR_PTS = (() => { const p = []; for (let r = 0; r < 9; r++) { const n = r % 2 === 0 ? 6 : 5; for (let c = 0; c < n; c++) p.push([r % 2 === 0 ? 1 + c * 2 : 2 + c * 2, r + 1]); } return p; })();
 let flagTimer = null;
+let raidUntil = 0; let testClicks = 0; let testClickAt = 0;
+function endRaid() { raidUntil = 0; document.body.classList.remove('raid'); if (deps?.radar) deps.radar.raid = null; snd.stopSiren?.(); }
+/** Seven lamp tests in a row: a huge bomber formation, sirens, every light flashing */
+function raid() {
+  const dur = 15000; raidUntil = Date.now() + dur; testUntil = raidUntil;
+  document.body.classList.add('raid');
+  deps.radar.raid = { t0: performance.now(), dur, ang: Math.random() * Math.PI * 2 };
+  snd.siren(dur);
+  telegram('Air raid warning', 'Large formation inbound, bearing unknown, altitude unknown, count unknown. All stations to alert. (It is only the lamp test button. Probably.)', 'Alert');
+  setTimeout(() => { if (Date.now() >= raidUntil - 50) endRaid(); }, dur + 100);
+}
 /** Old Glory fills the whole screen */
 export function flag() {
   const old = $('#flag');
@@ -374,7 +394,7 @@ export function initConsole(d) {
         lbtn('zout', 'Zoom −', 'a', () => { $('#zoomOut').click(); refs.knobs.range.draw(); }), lbtn('zin', 'Zoom +', 'a', () => { $('#zoomIn').click(); refs.knobs.range.draw(); }),
         lbtn('full', 'Full', 'g', () => $('#fullBtn').click(), () => !!document.fullscreenElement),
         lbtn('night', 'Night', 'a', () => { setDisp({ night: !disp().night }); applyNight(); }, () => !!disp().night),
-        lbtn('test', 'Lamp test', 'r', () => { testUntil = Date.now() + 2500; snd.lampBuzz(); }, () => Date.now() < testUntil),
+        lbtn('test', 'Lamp test', 'r', () => { const t = Date.now(); testClicks = t - testClickAt < 3000 ? testClicks + 1 : 1; testClickAt = t; if (testClicks >= 7) { testClicks = 0; raid(); return; } testUntil = t + 2500; snd.lampBuzz(); }, () => Date.now() < testUntil),
         lbtn('ack', 'Ack', 'r', () => { ackUntil = Date.now() + 10 * 60000; deps.app.unseenAlerts = 0; $('#alertBadge').hidden = true; }, () => alarmActive() && Date.now() > ackUntil))),
     grp('Altitude', h('div', { class: 'ledbars', id: 'ledbars' }, ...['GND', '<5K', '<10K', '<20K', '<30K', '30K+'].map((l) => h('div', { class: 'ledcol' },
       h('div', { class: 'leds' }, ...Array.from({ length: 8 }, (_, i) => h('i', { class: `led ${i < 5 ? 'g' : i < 7 ? 'a' : 'r'}` }))), h('div', { class: 'engrave tiny' }, l))))),
@@ -410,7 +430,7 @@ export function layoutConsole() {
   document.body.classList.toggle('console-on', on);
   document.body.classList.toggle('console-compact', H < 900);
   root.hidden = !on;
-  if (!on) { if (deps.radar.stage) deps.radar.setStage(null); applyNight(); return; }
+  if (!on) { if (deps.radar.stage) deps.radar.setStage(null); closeOverlays(); applyNight(); return; }
   const cx = W / 2; const cy = H / 2;
   const side = Math.floor(cx - (R + 90) - 12);
   root.style.setProperty('--side', `${side}px`);

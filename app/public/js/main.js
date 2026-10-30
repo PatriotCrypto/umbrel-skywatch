@@ -3,7 +3,7 @@ import { THEME_META, RARITY_COLORS } from './themes.js';
 import { $, h, api, store, fmtAlt, fmtDist, fmtNum, fmtDur, fmtAgo, fmtWhen, cardinal, label } from './util.js';
 import { openPanel, refreshPanel, currentPanel, loadHeat } from './panels.js';
 import * as snd from './audio.js';
-import { initConsole, layoutConsole, consoleData, updateConsole, consoleFoo } from './console.js';
+import { initConsole, layoutConsole, consoleData, updateConsole, consoleFoo, closeOverlays } from './console.js';
 
 export const app = {
   settings: null, status: null, snapshot: null, ruleTypes: {}, categories: {}, version: '',
@@ -17,7 +17,7 @@ const radar = new Radar($('#radar'), {
   onSelect: (hit) => {
     if (hit?.controller) return controllerClick();
     if (hit?.foo) return consoleFoo();
-    if (hit?.flyby) { snd.zap(); return showOperatorCard(); }
+    if (hit?.flyby) { if (currentTheme() === 'ww2') return; snd.zap(); return showOperatorCard(); }
     select(hit?.hex || null);
   },
   onFlyby: (f) => snd.flybyWhoosh(f.dur, Math.cos(f.a0) * 0.8, Math.cos(f.a1) * 0.8),
@@ -112,6 +112,7 @@ export function currentTheme() { return store('theme') || app.settings?.display.
 export function applyTheme(name) {
   document.documentElement.dataset.theme = name;
   radar.setTheme(name);
+  closeOverlays();
   layoutConsole();
   snd.syncAmbient();
   const meta = THEME_META[name];
@@ -338,7 +339,7 @@ function controllerClick() {
 let transTimer;
 function transmit(text) {
   const op = app.operator;
-  if (!op) return;
+  if (!op || currentTheme() === 'ww2') return;
   const t = $('#transmission');
   t.replaceChildren(h('b', {}, `◆ ${op.name}${op.rarity ? ' · ' + op.rarity : ''}`), text);
   // speak from beside the controller portrait when it is on screen

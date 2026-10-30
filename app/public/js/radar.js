@@ -255,6 +255,7 @@ export class Radar {
 
     this.drawFlyby(r);
     this.drawFoo(r);
+    this.drawRaid(r);
     this.theme.foreground(r, list);
     this.drawBang(r);
     this.visible = list;
@@ -303,6 +304,58 @@ export class Radar {
       g.addColorStop(0, `rgba(255,190,110,${a})`); g.addColorStop(0.4, `rgba(255,120,40,${a * 0.5})`); g.addColorStop(1, 'rgba(255,100,30,0)');
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, size * 2.4, 0, Math.PI * 2); ctx.fill();
     }
+    ctx.restore();
+  }
+
+  // WW2 easter egg (seven lamp tests): a huge bomber formation flies in toward the centre of the scope
+  drawRaid(r) {
+    const q = this.raid;
+    if (!q || this.theme.name !== 'ww2') return;
+    const k = (r.now - q.t0) / q.dur;
+    if (k > 1) { this.raid = null; return; }
+    const ctx = r.ctx; const R = r.R; const t = (r.now - q.t0) / 1000;
+    const ease = k < 0.8 ? k / 0.8 : 1;                    // reach the centre at 80%, then hold and fade
+    const dist = R * 1.3 * (1 - ease * ease * (3 - 2 * ease) * 0.97);
+    const fade = Math.min(1, k * 10, (1 - k) * 5);
+    const ux = Math.cos(q.ang); const uy = Math.sin(q.ang);   // direction from the centre to where they come from
+    const hx = -ux; const hy = -uy;                            // heading (toward the centre)
+    const px = -hy; const py = hx;                              // across the formation
+    ctx.save();
+    ctx.beginPath(); ctx.arc(r.cx, r.cy, R * 0.985, 0, Math.PI * 2); ctx.clip();
+    ctx.globalAlpha = fade;
+    // sectors: a warning ring pulsing out from the centre
+    if (k > 0.2) { const pr = ((t * 0.9) % 1); ctx.strokeStyle = `rgba(255,70,50,${(1 - pr) * 0.5})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(r.cx, r.cy, R * (0.1 + pr * 0.9), 0, Math.PI * 2); ctx.stroke(); }
+    const s = R * 0.022;
+    const drawPlane = (x, y, a, size) => {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 3.2);
+      g.addColorStop(0, 'rgba(255,120,60,.55)'); g.addColorStop(1, 'rgba(255,60,20,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, size * 3.2, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffeec2'; ctx.strokeStyle = '#ffeec2'; ctx.lineWidth = Math.max(1, size * 0.28);
+      ctx.beginPath(); ctx.moveTo(size * 1.4, 0); ctx.lineTo(-size * 1.2, 0); ctx.stroke();           // fuselage
+      ctx.beginPath(); ctx.moveTo(size * 0.2, -size * 1.6); ctx.lineTo(-size * 0.2, 0); ctx.lineTo(size * 0.2, size * 1.6); ctx.closePath(); ctx.fill(); // wings
+      ctx.beginPath(); ctx.moveTo(-size * 1.0, -size * 0.6); ctx.lineTo(-size * 1.2, 0); ctx.lineTo(-size * 1.0, size * 0.6); ctx.closePath(); ctx.fill(); // tail
+      ctx.restore();
+    };
+    // six combat boxes, each a stack of Vs, trailing back along the approach path
+    let n = 0;
+    for (let box = 0; box < 6; box++) {  // (the wedge is 6 wide; a second echelon trails behind)
+    for (let ech = 0; ech < 2; ech++) {
+      const bx = (box - 2.5) * s * 17; const by = Math.abs(box - 2.5) * s * 8;
+      for (let row = 0; row < 5; row++) for (let side = -1; side <= 1; side += (row === 0 ? 2 : 1)) {
+        if (row === 0 && side === 1) continue;
+        const along = by + ech * s * 26 + row * s * 3.4; const across = bx + side * row * s * 2.6;
+        const wob = Math.sin(t * 2 + n * 1.7) * s * 0.5; n++;
+        const x = r.cx + ux * (dist + along) + px * (across + wob); const y = r.cy + uy * (dist + along) + py * (across + wob);
+        const a = Math.atan2(hy, hx) + Math.sin(t * 1.3 + n) * 0.04;
+        ctx.strokeStyle = 'rgba(255,200,140,.18)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - hx * s * 6, y - hy * s * 6); ctx.stroke();
+        drawPlane(x, y, a, s * (0.75 + 0.1 * Math.sin(n)));
+      }
+    }
+    }
+    // the whole scope flickers red now and then
+    if (Math.floor(t * 4) % 2 === 0) { ctx.fillStyle = 'rgba(255,40,20,.07)'; ctx.fillRect(r.cx - R, r.cy - R, R * 2, R * 2); }
     ctx.restore();
   }
 

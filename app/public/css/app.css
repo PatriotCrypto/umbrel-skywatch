@@ -499,3 +499,31 @@ body.console-compact .mc-grid { gap: 3px 8px; }
 @keyframes wave { 0%, 100% { transform: skewY(-.6deg) scaleX(1.00); } 50% { transform: skewY(.6deg) scaleX(1.012); } }
 @keyframes sheen { to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .flag svg, .flag .sheen { animation: none; } }
+
+/* 0.3.7: switches read left = off, right = on */
+.toggle-cell .tpos { display: flex; justify-content: center; gap: 5px; font: 8px 'Share Tech Mono', monospace; letter-spacing: .06em; color: #667262; text-shadow: 0 1px 0 rgba(255,255,255,.08); }
+.toggle-cell .tpos .o { color: #ffb060; text-shadow: 0 0 5px rgba(255,150,50,.5); }
+.toggle-cell .tpos.lit .o { color: #667262; text-shadow: none; }
+.toggle-cell .tpos .i { color: #667262; }
+.toggle-cell .tpos.lit .i { color: #7dff8a; text-shadow: 0 0 6px rgba(80,255,110,.7); }
+.toggle .nut { width: 44px; height: 40px; }
+.toggle .well { background: linear-gradient(90deg, #2a1208 0 50%, #07140a 50% 100%); box-shadow: inset 0 3px 6px rgba(0,0,0,.95); }
+.toggle.on .well { background: linear-gradient(90deg, #130a05 0 50%, #0c3a16 50% 100%); }
+.toggle .lever { bottom: 3px; height: 26px; transform: rotate(-52deg); }
+.toggle.on .lever { transform: rotate(52deg); }
+body.console-compact .toggle .nut { width: 38px; height: 34px; }
+body.console-compact .toggle .lever { height: 21px; bottom: 3px; }
+body.console-compact .toggle { height: 38px; }
+body.console-compact .toggle-cell .tpos { font-size: 7px; gap: 3px; }
+
+/* air raid */
+@keyframes raidshake { 0% { translate: 0 0; } 25% { translate: 2px -1px; } 50% { translate: -2px 1px; } 75% { translate: 1px 2px; } 100% { translate: 0 0; } }
+@keyframes raidlamp { 0%, 100% { filter: brightness(2.2) saturate(1.5); } 50% { filter: brightness(.25); } }
+@keyframes raidglow { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+body.raid .cpanel { animation: raidshake .14s linear infinite; }
+body.raid .lamp, body.raid .lbtn .lens, body.raid .led { animation: raidlamp .36s steps(2, jump-none) infinite; }
+body.raid .lamp-cell:nth-child(3n) .lamp, body.raid .lbtns > :nth-child(3n) .lens { animation-duration: .24s; animation-delay: -.1s; }
+body.raid .lamp-cell:nth-child(3n+1) .lamp, body.raid .lbtns > :nth-child(3n+1) .lens { animation-duration: .5s; animation-delay: -.2s; }
+body.raid .ledcol:nth-child(even) .led { animation-delay: -.18s; }
+body.raid::after { content: ''; position: fixed; inset: 0; z-index: 8; pointer-events: none; background: radial-gradient(ellipse at center, rgba(255,30,10,0) 35%, rgba(255,30,10,.5) 100%); animation: raidglow .9s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { body.raid .cpanel, body.raid .lamp, body.raid .lbtn .lens, body.raid .led, body.raid::after { animation: none; } }
