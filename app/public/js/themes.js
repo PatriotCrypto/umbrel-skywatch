@@ -79,6 +79,24 @@ function gpsCells(r, cells, stroke, fill) {
   ctx.restore();
 }
 
+// Soft glow sprites, built once per colour and size, so the scope blits them instead of building gradients every frame
+const GLOWS = new Map();
+function glowSprite(col, size, dpr) {
+  const key = `${col}|${size}|${dpr}`;
+  let s = GLOWS.get(key);
+  if (!s) {
+    if (GLOWS.size > 60) GLOWS.clear();
+    const rad = size * 2.6; const px = Math.ceil(rad * 2 * dpr);
+    const c = document.createElement('canvas'); c.width = c.height = px;
+    const g = c.getContext('2d'); g.scale(dpr, dpr);
+    const gr = g.createRadialGradient(rad, rad, 0, rad, rad, rad);
+    gr.addColorStop(0, `rgba(${col},1)`); gr.addColorStop(0.35, `rgba(${col},0.45)`); gr.addColorStop(1, `rgba(${col},0)`);
+    g.fillStyle = gr; g.fillRect(0, 0, rad * 2, rad * 2);
+    s = { c, rad }; GLOWS.set(key, s);
+  }
+  return s;
+}
+
 function noiseTile(size, alpha) {
   const c = document.createElement('canvas');
   c.width = c.height = size;
@@ -191,6 +209,10 @@ function buildChassis(r) {
     g.fillText(String(d).padStart(3, '0'), cx + Math.cos(a) * (R + 16), cy + Math.sin(a) * (R + 16));
   }
   g.strokeStyle = '#000'; g.lineWidth = 6; g.beginPath(); g.arc(cx, cy, R + 2, 0, TAU); g.stroke();
+  // the dark tube face (static, so it lives here rather than being repainted every frame)
+  const face = g.createRadialGradient(cx, cy, R * 0.05, cx, cy, R);
+  face.addColorStop(0, PAL.bg[0]); face.addColorStop(0.7, PAL.bg[1]); face.addColorStop(1, PAL.bg[2]);
+  g.fillStyle = face; g.beginPath(); g.arc(cx, cy, R, 0, TAU); g.fill();
   return c;
 }
 
@@ -201,13 +223,19 @@ const ww2 = {
     const { ctx, w, h, cx, cy, R, state, radar } = r;
     PAL = PALS[r.display.phosphor] || PALS.green;
     if (radar.stage) {
-      const key = `${w}x${h}:${cx},${cy},${R}:${radar.stage.top},${radar.stage.bot}:${radar.dpr}`;
-      if (!state.chassis || state.chassis.key !== key) state.chassis = { key, canvas: buildChassis(r) };
-      ctx.drawImage(state.chassis.canvas, 0, 0, w, h);
+      const key = `${w}x${h}:${cx},${cy},${R}:${radar.stage.top},${radar.stage.bot}:${radar.dpr}:${PAL.name}`;
+      if (!state.chassis || state.chassis.key !== key) {
+        const canvas = buildChassis(r);
+        state.chassis = { key, canvas, separate: radar.showChassis(canvas) };
+      }
+      if (state.chassis.separate) ctx.clearRect(0, 0, w, h);
+      else ctx.drawImage(state.chassis.canvas, 0, 0, w, h);
     } else {
+      radar.hideChassis();
       ctx.fillStyle = '#020502';
       ctx.fillRect(0, 0, w, h);
     }
+    if (radar.stage && state.chassis?.separate) return;
     const g = ctx.createRadialGradient(cx, cy, R * 0.05, cx, cy, R);
     g.addColorStop(0, PAL.bg[0]);
     g.addColorStop(0.7, PAL.bg[1]);
@@ -263,13 +291,10 @@ const ww2 = {
     const emg = d.sq && EMERGENCY.has(d.sq);
     const glow = (x, y, k, size) => {
       const [sx, sy] = r.toScreen(x, y);
-      const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, size * 2.6);
-      const col = emg ? '255,90,74' : PAL.glow;
-      g.addColorStop(0, `rgba(${col},${k})`);
-      g.addColorStop(0.35, `rgba(${col},${k * 0.45})`);
-      g.addColorStop(1, `rgba(${col},0)`);
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(sx, sy, size * 2.6, 0, TAU); ctx.fill();
+      const spr = glowSprite(emg ? '255,90,74' : PAL.glow, size, r.radar.dpr || 1);
+      ctx.globalAlpha = Math.max(0, Math.min(1, k));
+      ctx.drawImage(spr.c, sx - spr.rad, sy - spr.rad, spr.rad * 2, spr.rad * 2);
+      ctx.globalAlpha = 1;
       return [sx, sy];
     };
     // ghost echoes of earlier sweeps
@@ -307,45 +332,63 @@ const ww2 = {
     const { ctx, cx, cy, R, sweep, w, h, state } = r;
     // beam + afterglow
     const a = (sweep - 90) * DEG;
-    ctx.save();
-    clipScope(r);
     const beamOn = r.display.beam !== false;
-    if (beamOn && ctx.createConicGradient) {
-      const g = ctx.createConicGradient(a - 1.2, cx, cy);
-      g.addColorStop(0, `rgba(${PAL.main},0)`);
-      g.addColorStop(1.2 / TAU, `rgba(${PAL.main},0.20)`);
-      g.addColorStop(1.2 / TAU + 0.0001, `rgba(${PAL.main},0)`);
-      g.addColorStop(1, `rgba(${PAL.main},0)`);
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a - 1.2, a); ctx.closePath(); ctx.fill();
+    if (beamOn) {
+      clipScope(r);   // (saves the canvas state itself; restored below)
+      const dpr = r.radar.dpr || 1;
+      const bk = `${PAL.name}:${Math.round(R)}:${dpr}`;
+      if (!state.beam || state.beam.key !== bk) {
+        const px = Math.ceil(R * 2 * dpr);
+        const bc = document.createElement('canvas'); bc.width = bc.height = px;
+        const bg = bc.getContext('2d'); bg.scale(dpr, dpr);
+        if (bg.createConicGradient) {
+          const gr = bg.createConicGradient(-1.2, R, R);
+          gr.addColorStop(0, `rgba(${PAL.main},0)`);
+          gr.addColorStop(1.2 / TAU, `rgba(${PAL.main},0.20)`);
+          gr.addColorStop(1.2 / TAU + 0.0001, `rgba(${PAL.main},0)`);
+          gr.addColorStop(1, `rgba(${PAL.main},0)`);
+          bg.fillStyle = gr; bg.beginPath(); bg.moveTo(R, R); bg.arc(R, R, R, -1.2, 0); bg.closePath(); bg.fill();
+        }
+        state.beam = { key: bk, canvas: bc };
+      }
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(a); ctx.drawImage(state.beam.canvas, -R, -R, R * 2, R * 2); ctx.restore();
     }
     if (beamOn) {
-      ctx.strokeStyle = `rgba(${PAL.beam},0.85)`;
-      ctx.lineWidth = 1.6;
-      ctx.shadowColor = `rgba(${PAL.main},0.9)`; ctx.shadowBlur = 8;
-      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); ctx.stroke();
-      ctx.shadowBlur = 0;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R);
+      ctx.strokeStyle = `rgba(${PAL.main},0.16)`; ctx.lineWidth = 7; ctx.stroke();   // soft glow (cheaper than a shadow blur)
+      ctx.strokeStyle = `rgba(${PAL.beam},0.85)`; ctx.lineWidth = 1.6; ctx.stroke();
+      ctx.restore();
     }
-    // grain
-    state.noiseShift = (state.noiseShift + 37) % 128;
-    const pat = ctx.createPattern(state.noise, 'repeat');
-    ctx.translate(state.noiseShift, state.noiseShift * 0.7);
-    ctx.fillStyle = pat;
+    // grain: three pre-made frames of static, cycled at about 12 per second
+    const gdpr = r.radar.dpr || 1;
+    const gk = `${Math.round(R)}:${gdpr}`;
+    if (!state.grain || state.grain.key !== gk) {
+      const px = Math.ceil(R * 2 * gdpr);
+      const frames = [0, 1, 2].map(() => {
+        const gc = document.createElement('canvas'); gc.width = gc.height = px;
+        const gg = gc.getContext('2d');
+        gg.beginPath(); gg.arc(px / 2, px / 2, px / 2, 0, TAU); gg.clip();
+        gg.fillStyle = gg.createPattern(noiseTile(128, 0.08), 'repeat');
+        gg.fillRect(0, 0, px, px);
+        return gc;
+      });
+      state.grain = { key: gk, frames };
+    }
+    const gf = state.grain.frames[Math.floor(r.now / 80) % 3];
     const gain = Math.max(0, r.display.gain ?? 1);
-    for (let p = 0; p < Math.ceil(gain); p++) { ctx.globalAlpha = Math.min(1, gain - p); ctx.fillRect(-state.noiseShift, -state.noiseShift, w + 128, h + 128); }
+    for (let p = 0; p < Math.ceil(gain); p++) { ctx.globalAlpha = Math.min(1, gain - p); ctx.drawImage(gf, cx - R, cy - R, R * 2, R * 2); }
     ctx.globalAlpha = 1;
-    ctx.restore();
     // brightness knob: dim the tube, or push it past normal
     const bright = r.display.brightness ?? 1;
     if (Math.abs(bright - 1) > 0.02) {
-      ctx.save(); clipScope(r);
+      clipScope(r);
       if (bright < 1) { ctx.fillStyle = `rgba(0,0,0,${(1 - bright) * 0.85})`; ctx.fillRect(cx - R, cy - R, R * 2, R * 2); }
       else { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(60,150,60,${(bright - 1) * 0.35})`; ctx.fillRect(cx - R, cy - R, R * 2, R * 2); }
       ctx.restore();
     }
     if (r.radar.stage) {
       // glass reflection instead of the plain bezel and vignette
-      ctx.save(); clipScope(r);
+      clipScope(r);
       const gl = ctx.createLinearGradient(cx - R, cy - R, cx + R * 0.2, cy + R * 0.2);
       gl.addColorStop(0, 'rgba(255,255,255,0.07)'); gl.addColorStop(0.5, 'rgba(255,255,255,0)');
       ctx.fillStyle = gl; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
@@ -805,6 +848,7 @@ const omniverse = {
   flyby(r, x, y, ang) { pixelShip(r.ctx, x, y, ang, 3, [OMNI.orange, OMNI.cream]); },
 };
 
+export const phosphor = (name) => PALS[name] || PALS.green;
 export const THEMES = { ww2, tower, space, omniverse };
 export const THEME_META = {
   ww2: { title: 'WW2 information center', sub: 'Phosphor scope in a radar console, with working knobs', brand: 'SKYWATCH', tagline: 'Aircraft warning service', swatch: ['#030703', '#6dff6d', '#ffb347'] },

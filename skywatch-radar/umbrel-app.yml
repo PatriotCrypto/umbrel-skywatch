@@ -2,7 +2,7 @@ manifestVersion: 1
 id: skywatch-radar
 category: automation
 name: Skywatch Radar
-version: "0.3.7"
+version: "0.3.8"
 tagline: A live radar screen for the aircraft around your home
 icon: https://raw.githubusercontent.com/PatriotCrypto/umbrel-skywatch/main/app/public/img/icon.svg
 description: >-
@@ -37,9 +37,9 @@ description: >-
 
   Skywatch is an unofficial community app and is not affiliated with or endorsed by Wingbits.
 releaseNotes: >-
-  WW2 view fixes: switches now read left for off and right for on, with a lit ON/OFF label, the
-  Morse chart closes when you change views, and the Wingnauts controller no longer talks on the
-  WW2 scope. Plus one more easter egg on the lamp test button.
+  Fixes the WW2 view slowing down and getting choppy after running for a while: the scope was
+  leaking a little drawing state on every frame. Also lighter on the graphics card (cached glows,
+  static grain and a separately drawn steel cabinet).
 developer: PatriotCrypto
 website: https://github.com/PatriotCrypto/umbrel-skywatch
 dependencies: []

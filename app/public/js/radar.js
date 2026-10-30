@@ -13,6 +13,7 @@ export class Radar {
     this.opts = { onFlyby, onContact, onSweep, onBlip, onFoo };
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
+    this.chassisEl = document.getElementById('chassis');
     this.onSelect = onSelect;
     this.getDisplay = getDisplay;
     this.aircraft = new Map();
@@ -37,7 +38,18 @@ export class Radar {
     requestAnimationFrame(this.frame);
   }
 
+  /** Park a pre-drawn image on the canvas behind the live one (the WW2 steel cabinet), so it isn't repainted every frame */
+  showChassis(src) {
+    const c = this.chassisEl; if (!c) return false;
+    c.width = src.width; c.height = src.height;
+    c.getContext('2d').drawImage(src, 0, 0);
+    c.style.display = 'block';
+    return true;
+  }
+  hideChassis() { if (this.chassisEl) this.chassisEl.style.display = 'none'; }
+
   setTheme(name) {
+    this.hideChassis();
     this.theme = THEMES[name] || THEMES.ww2;
     this.themeState = {};
     this.theme.init?.(this.themeState, this);

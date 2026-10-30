@@ -216,7 +216,7 @@ body.console-on .card { left: calc(var(--side, 300px) + 120px); top: calc(var(--
 body.console-on .hud-top { padding-right: 34px; padding-left: 34px; }
 body.console-on .hud-bottom { padding-left: 34px; padding-right: 34px; }
 body.console-on .brand-sub, body.console-on .hud-readout, body.console-on .budget { color: #c3c8a8; text-shadow: 0 1px 0 rgba(0,0,0,.6); }
-body.console-night #radar, body.console-night .console { filter: brightness(.52) saturate(.9); }
+body.console-night #radar, body.console-night #chassis, body.console-night .console { filter: brightness(.52) saturate(.9); }
 
 .engrave { font-family: 'Share Tech Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #e2dbbd; text-align: center; text-shadow: 0 1px 0 rgba(0,0,0,.8); }
 .engrave.tiny { font-size: 9px; letter-spacing: .08em; color: #b9b497; }
@@ -527,3 +527,7 @@ body.raid .lamp-cell:nth-child(3n+1) .lamp, body.raid .lbtns > :nth-child(3n+1) 
 body.raid .ledcol:nth-child(even) .led { animation-delay: -.18s; }
 body.raid::after { content: ''; position: fixed; inset: 0; z-index: 8; pointer-events: none; background: radial-gradient(ellipse at center, rgba(255,30,10,0) 35%, rgba(255,30,10,.5) 100%); animation: raidglow .9s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { body.raid .cpanel, body.raid .lamp, body.raid .lbtn .lens, body.raid .led, body.raid::after { animation: none; } }
+
+/* the steel cabinet is drawn once on its own canvas behind the live scope */
+#chassis { position: fixed; inset: 0; width: 100vw; height: 100vh; display: none; pointer-events: none; }
+
