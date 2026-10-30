@@ -3,12 +3,13 @@
 // browser), off by default, and only ever plays in the Omniverse view.
 import { store } from './util.js';
 
-const DEFAULTS = { on: false, vol: 0.5, controller: true, ship: true, radar: true, ambient: false };
+const DEFAULTS = { on: false, vol: 0.5, controller: true, ship: true, radar: true, ambient: false, ww2: true, hum: false };
 
 let ctx = null; let master = null; let comp = null;
 let ambientNodes = null;
 let ctx_ok = () => false; // set by init: is Omniverse showing, and is it outside quiet hours?
 let quietCheck = () => false;
+let isWw2 = () => false;
 let lastPing = 0; let lastChime = 0;
 
 export function soundPrefs() { return { ...DEFAULTS, ...(store('sound') || {}) }; }
@@ -19,8 +20,8 @@ export function saveSoundPrefs(patch) {
 }
 
 /** isOmniverse: () => boolean, isQuiet: () => boolean */
-export function initAudio({ isOmniverse, isQuiet }) {
-  ctx_ok = isOmniverse; quietCheck = isQuiet;
+export function initAudio({ isOmniverse, isQuiet, isWw2: ww2 }) {
+  ctx_ok = isOmniverse; quietCheck = isQuiet; if (ww2) isWw2 = ww2;
   // Browsers only allow audio after a click or key press, so unlock on the first one.
   const unlock = () => { ensure(); syncAmbient(); };
   ['pointerdown', 'keydown', 'touchstart'].forEach((e) => window.addEventListener(e, unlock, { passive: true }));
@@ -54,7 +55,8 @@ function can(cat) {
   if (forcing) return ensure();
   const p = soundPrefs();
   if (!p.on || (cat && !p[cat])) return false;
-  if (!ctx_ok() || quietCheck()) return false;
+  if (cat === 'ww2' ? !isWw2() : !ctx_ok()) return false;
+  if (quietCheck()) return false;
   return ensure();
 }
 
@@ -224,25 +226,40 @@ export function jingle() {
 }
 
 // ---------- ambient hum ----------
-function startAmbient() {
+let ambientMode = null;
+function startAmbient(mode = 'omni') {
+  if (ctx && ambientNodes && ambientMode !== mode) stopAmbient();
   if (ambientNodes || !ctx) return;
+  ambientMode = mode;
   const t = ctx.currentTime;
-  const out = ctx.createGain(); out.gain.setValueAtTime(0.0001, t); out.gain.linearRampToValueAtTime(0.05, t + 4);
+  const out = ctx.createGain(); out.gain.setValueAtTime(0.0001, t); out.gain.linearRampToValueAtTime(mode === 'ww2' ? 0.06 : 0.05, t + 4);
   out.connect(master);
-  const o1 = ctx.createOscillator(); o1.type = 'sine'; o1.frequency.value = 55;
-  const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = 82.6;
-  const lfo = ctx.createOscillator(); lfo.frequency.value = 0.07;
-  const lfoG = ctx.createGain(); lfoG.gain.value = 0.35;
-  const mod = ctx.createGain(); mod.gain.value = 0.65;
-  lfo.connect(lfoG); lfoG.connect(mod.gain);
-  o1.connect(mod); o2.connect(mod);
+  const oscs = [];
   const s = ctx.createBufferSource(); s.buffer = noiseBuffer(); s.loop = true;
-  const flt = ctx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 220;
-  const ng = ctx.createGain(); ng.gain.value = 0.25;
-  s.connect(flt); flt.connect(ng);
-  mod.connect(out); ng.connect(out);
-  [o1, o2, lfo].forEach((o) => o.start()); s.start();
-  ambientNodes = { out, stop: () => { [o1, o2, lfo].forEach((o) => { try { o.stop(); } catch { /* done */ } }); try { s.stop(); } catch { /* done */ } } };
+  if (mode === 'ww2') {
+    // mains transformer hum with its harmonics, plus a little tube hiss
+    for (const [f, v] of [[60, 0.6], [120, 0.35], [180, 0.12], [240, 0.06]]) {
+      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const g = ctx.createGain(); g.gain.value = v; o.connect(g); g.connect(out); oscs.push(o);
+    }
+    const flt = ctx.createBiquadFilter(); flt.type = 'bandpass'; flt.frequency.value = 3200; flt.Q.value = 0.7;
+    const ng = ctx.createGain(); ng.gain.value = 0.05; s.connect(flt); flt.connect(ng); ng.connect(out);
+  } else {
+    const o1 = ctx.createOscillator(); o1.type = 'sine'; o1.frequency.value = 55;
+    const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = 82.6;
+    const lfo = ctx.createOscillator(); lfo.frequency.value = 0.07;
+    const lfoG = ctx.createGain(); lfoG.gain.value = 0.35;
+    const mod = ctx.createGain(); mod.gain.value = 0.65;
+    lfo.connect(lfoG); lfoG.connect(mod.gain);
+    o1.connect(mod); o2.connect(mod);
+    const flt = ctx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 220;
+    const ng = ctx.createGain(); ng.gain.value = 0.25;
+    s.connect(flt); flt.connect(ng);
+    mod.connect(out); ng.connect(out);
+    oscs.push(o1, o2, lfo);
+  }
+  oscs.forEach((o) => o.start()); s.start();
+  ambientNodes = { out, stop: () => { oscs.forEach((o) => { try { o.stop(); } catch { /* done */ } }); try { s.stop(); } catch { /* done */ } } };
 }
 
 function stopAmbient() {
@@ -256,8 +273,9 @@ function stopAmbient() {
 /** Start or stop the hum to match the settings, the view and quiet hours */
 export function syncAmbient() {
   const p = soundPrefs();
-  const want = p.on && p.ambient && ctx_ok() && !quietCheck();
-  if (want) { if (ensure()) startAmbient(); } else stopAmbient();
+  const quiet = quietCheck();
+  const mode = p.on && !quiet ? (ctx_ok() && p.ambient ? 'omni' : isWw2() && p.hum ? 'ww2' : null) : null;
+  if (mode) { if (ensure()) startAmbient(mode); } else stopAmbient();
 }
 
 /** Plays a sample so the volume slider and toggle can be tried from settings */
@@ -266,4 +284,137 @@ export function preview() {
   forcing = true; lastPing = 0;
   ping(true); transmission(30);
   forcing = false;
+}
+
+// ---------- WW2 console: telegraph key ----------
+let keyTone = null;
+/** Sidetone while the telegraph key is held down */
+export function keyDown() {
+  if (keyTone || !can('ww2')) return;
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator(); const g = ctx.createGain();
+  o.type = 'sine'; o.frequency.value = 650;
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.18, t + 0.006);
+  o.connect(g); g.connect(master); o.start(t);
+  keyTone = { o, g };
+}
+export function keyUp() {
+  if (!keyTone) return;
+  const { o, g } = keyTone; keyTone = null;
+  const t = ctx.currentTime;
+  g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t); g.gain.linearRampToValueAtTime(0.0001, t + 0.012);
+  o.stop(t + 0.02);
+}
+/** Plays a Morse string like "...-" (dot 90 ms, dash 270 ms) */
+export function morse(pattern) {
+  if (!can('ww2')) return;
+  let at = 0;
+  for (const c of pattern) {
+    if (c === ' ') { at += 0.27; continue; }
+    const len = c === '.' ? 0.09 : 0.27;
+    tone({ f: 650, dur: len, type: 'sine', vol: 0.18, at, attack: 0.006 });
+    at += len + 0.09;
+  }
+}
+/** A teleprinter chatter for the telegram card */
+export function teleprinter(chars = 40) {
+  if (!can('ww2')) return;
+  const n = Math.min(40, Math.max(6, Math.round(chars / 3)));
+  for (let i = 0; i < n; i++) noise({ dur: 0.02, vol: 0.14, filter: 'highpass', f: 2500, at: i * 0.045 + Math.random() * 0.015 });
+  noise({ dur: 0.05, vol: 0.2, filter: 'bandpass', f: 900, at: n * 0.045 + 0.05 });
+}
+
+// ---------- WW2 console effects ----------
+let lastRatchet = 0; let lastBlip = 0;
+/** Soft thump each time the beam passes north */
+export function sweepThump() {
+  if (!can('ww2')) return;
+  tone({ f: 75, f2: 42, dur: 0.22, type: 'sine', vol: 0.16 });
+  noise({ dur: 0.05, vol: 0.05, filter: 'lowpass', f: 600 });
+}
+/** A contact painted by the beam: a short blip panned to where it is on the scope */
+export function blip(pan = 0) {
+  const now = performance.now();
+  if (now - lastBlip < 120) return;
+  if (!can('ww2')) return;
+  lastBlip = now;
+  tone({ f: 1500, dur: 0.07, type: 'sine', vol: 0.1, attack: 0.002, pan: pan * 0.7 });
+  tone({ f: 3000, dur: 0.04, type: 'sine', vol: 0.025, attack: 0.002, pan: pan * 0.7 });
+}
+/** Relay clack for the lit push buttons */
+export function clack() {
+  if (!can('ww2')) return;
+  noise({ dur: 0.03, vol: 0.4, filter: 'bandpass', f: 1400, q: 1.2 });
+  tone({ f: 170, f2: 90, dur: 0.05, type: 'square', vol: 0.1, at: 0.025 });
+}
+/** Heavy toggle switch or selector detent */
+export function clunk(up = true) {
+  if (!can('ww2')) return;
+  noise({ dur: 0.04, vol: 0.4, filter: 'bandpass', f: up ? 900 : 700, q: 0.9 });
+  tone({ f: up ? 110 : 90, f2: 55, dur: 0.1, type: 'sine', vol: 0.3 });
+  noise({ dur: 0.02, vol: 0.22, filter: 'highpass', f: 2400, at: 0.07 });
+}
+/** Detent click as a knob turns */
+export function ratchet() {
+  const now = performance.now();
+  if (now - lastRatchet < 35) return;
+  if (!can('ww2')) return;
+  lastRatchet = now;
+  noise({ dur: 0.012, vol: 0.28, filter: 'highpass', f: 2200 });
+  tone({ f: 380, dur: 0.02, type: 'square', vol: 0.03 });
+}
+/** Lamp test: relays chattering and a buzz */
+export function lampBuzz() {
+  if (!can('ww2')) return;
+  for (let i = 0; i < 7; i++) noise({ dur: 0.025, vol: 0.3, filter: 'bandpass', f: 1300, q: 1.2, at: i * 0.07 });
+  tone({ f: 120, dur: 1.2, type: 'sawtooth', vol: 0.05, at: 0.1, attack: 0.05 });
+}
+/** Air-raid style wail for an emergency squawk */
+export function klaxon() {
+  if (!can('ww2')) return;
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator(); const flt = ctx.createBiquadFilter(); const g = ctx.createGain();
+  o.type = 'sawtooth'; flt.type = 'lowpass'; flt.frequency.value = 1700;
+  o.frequency.setValueAtTime(420, t);
+  for (let i = 0; i < 2; i++) { o.frequency.linearRampToValueAtTime(880, t + i * 1.4 + 0.7); o.frequency.linearRampToValueAtTime(420, t + i * 1.4 + 1.4); }
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.11, t + 0.15); g.gain.setValueAtTime(0.11, t + 2.5); g.gain.linearRampToValueAtTime(0.0001, t + 2.9);
+  o.connect(flt); flt.connect(g); g.connect(master); o.start(t); o.stop(t + 3);
+}
+/** Desk bell, at the end of a telegram */
+/** A short bugle call for the flag */
+export function bugle() {
+  if (!can('ww2')) return;
+  [[392, .16], [523, .16], [659, .16], [784, .5], [659, .16], [784, 1.0]].reduce((at, [f, d]) => {
+    tone({ f, dur: d * 1.1, type: 'triangle', vol: 0.16, at, attack: 0.02 });
+    tone({ f: f * 2, dur: d, type: 'sine', vol: 0.04, at, attack: 0.02 });
+    return at + d + 0.03;
+  }, 0);
+}
+export function bell() {
+  if (!can('ww2')) return;
+  tone({ f: 1760, dur: 1.1, type: 'sine', vol: 0.12 });
+  tone({ f: 2349, dur: 0.8, type: 'sine', vol: 0.06 });
+  tone({ f: 3520, dur: 0.4, type: 'sine', vol: 0.025 });
+}
+/** The unidentified contact: an eerie warble */
+export function warble() {
+  if (!can('ww2')) return;
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator(); const lfo = ctx.createOscillator(); const lg = ctx.createGain(); const g = ctx.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(480, t); o.frequency.linearRampToValueAtTime(620, t + 3.2);
+  lfo.frequency.value = 6.5; lg.gain.value = 38; lfo.connect(lg); lg.connect(o.frequency);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.07, t + 1); g.gain.linearRampToValueAtTime(0.0001, t + 3.4);
+  o.connect(g); g.connect(master); o.start(t); lfo.start(t); o.stop(t + 3.5); lfo.stop(t + 3.5);
+}
+/** A radial engine passing by (a warbird on the scope) */
+export function engine() {
+  if (!can('ww2')) return;
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator(); const flt = ctx.createBiquadFilter(); const am = ctx.createGain(); const lfo = ctx.createOscillator(); const lg = ctx.createGain(); const g = ctx.createGain();
+  o.type = 'sawtooth'; o.frequency.setValueAtTime(70, t); o.frequency.linearRampToValueAtTime(92, t + 1.8); o.frequency.linearRampToValueAtTime(64, t + 3.6);
+  flt.type = 'lowpass'; flt.frequency.value = 340;
+  am.gain.value = 0.55; lfo.frequency.value = 15; lg.gain.value = 0.45; lfo.connect(lg); lg.connect(am.gain);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.14, t + 1.6); g.gain.linearRampToValueAtTime(0.0001, t + 3.6);
+  o.connect(flt); flt.connect(am); am.connect(g); g.connect(master);
+  o.start(t); lfo.start(t); o.stop(t + 3.7); lfo.stop(t + 3.7);
 }

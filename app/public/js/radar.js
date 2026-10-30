@@ -9,8 +9,8 @@ const MAX_COAST_S = 300;
 const EMG = new Set(['7500', '7600', '7700']);
 
 export class Radar {
-  constructor(canvas, { onSelect, getDisplay, onFlyby, onContact }) {
-    this.opts = { onFlyby, onContact };
+  constructor(canvas, { onSelect, getDisplay, onFlyby, onContact, onSweep, onBlip, onFoo }) {
+    this.opts = { onFlyby, onContact, onSweep, onBlip, onFoo };
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.onSelect = onSelect;
@@ -131,7 +131,21 @@ export class Radar {
     return { x, y, hdg, stale };
   }
 
+  /** Where the scope sits when the WW2 console surrounds it (null = fill the window) */
+  setStage(rect) {
+    this.stage = rect;
+    this.themeState = {};
+    this.theme.init?.(this.themeState, this);
+  }
+
   geom() {
+    const st = this.stage;
+    if (st && this.theme.name === 'ww2') {
+      const { cx, cy, R } = st;
+      const rangeNm = this.rangeNm || this.radiusNm || 40;
+      const scale = R / rangeNm;
+      return { cx, cy, R, scale, rangeNm, toScreen: (x, y) => [cx + x * scale, cy - y * scale] };
+    }
     const margin = Math.max(24, Math.min(this.w, this.h) * 0.06);
     const R = Math.min(this.w, this.h) / 2 - margin;
     const cx = this.w / 2; const cy = this.h / 2 + (this.h > this.w ? -20 : 8);
@@ -220,9 +234,11 @@ export class Radar {
           const hist = a.paint?.hist || [];
           if (a.paint) hist.unshift({ x: a.paint.x, y: a.paint.y });
           if (hist.length > 4) hist.pop();
+          if (crossed) this.opts.onBlip?.(Math.max(-1, Math.min(1, p.x / g.rangeNm)));
           a.paint = { x: p.x, y: p.y, t: now, hist };
         }
       }
+      if (sweep < prev) this.opts.onSweep?.();
       this.lastSweep = sweep;
     }
 
@@ -238,6 +254,7 @@ export class Radar {
     if (sel) this.theme.aircraft(r, sel, true);
 
     this.drawFlyby(r);
+    this.drawFoo(r);
     this.theme.foreground(r, list);
     this.drawBang(r);
     this.visible = list;
@@ -259,6 +276,39 @@ export class Radar {
     const y = r.cy + Math.sin(ang) * r.R * 0.97;
     f.x = x; f.y = y;
     (this.theme.flyby || THEMES.omniverse.flyby)(r, x, y, ang + Math.PI / 2);
+  }
+
+  // WW2 easter egg: now and then an unidentified glowing contact wanders across the scope
+  // ("foo fighters", reported by Allied aircrews in 1944-45). Click it.
+  drawFoo(r) {
+    if (this.theme.name !== 'ww2') { this.foo = null; return; }
+    const now = r.now; const ctx = r.ctx;
+    if (!this.nextFoo) this.nextFoo = now + (8 + Math.random() * 12) * 60000;
+    if (!this.foo && now >= this.nextFoo) this.spawnFoo();
+    const f = this.foo;
+    if (!f) return;
+    const k = (now - f.t0) / f.dur;
+    if (k > 1) { this.foo = null; this.nextFoo = now + (25 + Math.random() * 35) * 60000; return; }
+    const t = (now - f.t0) / 1000;
+    const fade = Math.min(1, k * 8, (1 - k) * 8);
+    ctx.save();
+    for (let i = 0; i < 3; i++) {
+      const ang = f.a + (t - i * 1.1) * f.w;
+      const rad = r.R * (f.r + 0.07 * Math.sin((t - i * 1.1) * 0.7));
+      const x = r.cx + Math.cos(ang) * rad; const y = r.cy + Math.sin(ang) * rad;
+      if (i === 0) { f.x = x; f.y = y; }
+      const size = (i === 0 ? 11 : 8) * (0.85 + 0.15 * Math.sin(t * 6 + i));
+      const g = ctx.createRadialGradient(x, y, 0, x, y, size * 2.4);
+      const a = (i === 0 ? 0.8 : 0.5) * fade;
+      g.addColorStop(0, `rgba(255,190,110,${a})`); g.addColorStop(0.4, `rgba(255,120,40,${a * 0.5})`); g.addColorStop(1, 'rgba(255,100,30,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, size * 2.4, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  spawnFoo() {
+    this.opts.onFoo?.();
+    this.foo = { t0: performance.now(), dur: 45000, a: Math.random() * Math.PI * 2, w: (Math.random() > 0.5 ? 1 : -1) * (0.1 + Math.random() * 0.1), r: 0.35 + Math.random() * 0.4 };
   }
 
   startFlyby() {
@@ -338,6 +388,7 @@ export class Radar {
     const c = this.themeState.controllerRect;
     if (c && this.theme.name === 'omniverse' && px >= c[0] && px <= c[0] + c[2] && py >= c[1] && py <= c[1] + c[3]) return { controller: true };
     if (this.flyby && Math.hypot(px - this.flyby.x, py - this.flyby.y) < 18) return { flyby: true };
+    if (this.foo && this.foo.x != null && Math.hypot(px - this.foo.x, py - this.foo.y) < 28) return { foo: true };
     let best = null; let bd = 22;
     for (const { a } of this.visible || []) {
       if (!a.screen) continue;

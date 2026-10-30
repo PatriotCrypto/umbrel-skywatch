@@ -28,7 +28,7 @@ function clipScope(r) {
 function heatCells(r, cells, color) {
   if (!cells.length) return;
   const { ctx, state, radar } = r;
-  const key = `${cells.length}:${cells[0].n}:${r.rangeNm.toFixed(2)}:${r.w}x${r.h}:${radar.theme.name}:${radar.center?.lat},${radar.center?.lon}`;
+  const key = `${cells.length}:${cells[0].n}:${r.rangeNm.toFixed(2)}:${r.w}x${r.h}:${radar.theme.name}:${PAL.name}:${radar.center?.lat},${radar.center?.lon}`;
   if (!state.heat || state.heat.key !== key) {
     const dpr = radar.dpr || 1;
     const off = document.createElement('canvas');
@@ -95,33 +95,139 @@ function noiseTile(size, alpha) {
 /* =====================================================================
    1. WW2 plot room — phosphor PPI scope with a rotating sweep
    ===================================================================== */
+const PALS = {
+  green: { name: 'green', main: '109,255,109', glow: '150,255,140', text: '185,245,176', beam: '190,255,180', hi: '#b9f5b0', hex: '#6dff6d', bg: ['#0c2a0c', '#071a07', '#041004'] },
+  amber: { name: 'amber', main: '255,179,71', glow: '255,205,120', text: '255,222,170', beam: '255,225,170', hi: '#ffdeaa', hex: '#ffb347', bg: ['#2a1c08', '#1a1105', '#100a03'] },
+  blue: { name: 'blue', main: '120,195,255', glow: '165,220,255', text: '200,230,255', beam: '215,238,255', hi: '#c8e6ff', hex: '#78c3ff', bg: ['#0a1a2a', '#06111c', '#040b12'] },
+  white: { name: 'white', main: '225,232,225', glow: '245,248,245', text: '240,242,240', beam: '255,255,255', hi: '#f2f5f2', hex: '#e1e8e1', bg: ['#1c1f1c', '#111411', '#0a0c0a'] },
+};
+let PAL = PALS.green;
+
+// The steel cabinet around the scope: panels, screws, hood and the black bearing ring.
+// Drawn once into an offscreen canvas and reused every frame.
+function buildChassis(r) {
+  const { w, h, cx, cy, R, radar } = r;
+  const st = radar.stage; const dpr = radar.dpr || 1;
+  const c = document.createElement('canvas');
+  c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+  const g = c.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  let seed = 7; const rand = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+
+  // painted steel with a hammered grain and brushed streaks
+  const base = g.createLinearGradient(0, 0, w, h);
+  base.addColorStop(0, '#556150'); base.addColorStop(0.5, '#475344'); base.addColorStop(1, '#333d33');
+  g.fillStyle = base; g.fillRect(0, 0, w, h);
+  g.globalAlpha = 0.13; g.fillStyle = g.createPattern(noiseTile(128, 1), 'repeat'); g.fillRect(0, 0, w, h); g.globalAlpha = 1;
+  for (let x = 0; x < w; x += 2) {
+    g.fillStyle = rand() > 0.5 ? `rgba(255,255,255,${0.012 + rand() * 0.035})` : `rgba(0,0,0,${0.02 + rand() * 0.05})`;
+    g.fillRect(x, 0, 1, h);
+  }
+  const light = g.createRadialGradient(cx, h * 0.12, 20, cx, h * 0.3, Math.max(w, h) * 0.75);
+  light.addColorStop(0, 'rgba(255,255,235,0.16)'); light.addColorStop(1, 'rgba(255,255,235,0)');
+  g.fillStyle = light; g.fillRect(0, 0, w, h);
+  const edge = g.createLinearGradient(0, 0, w, 0);
+  edge.addColorStop(0, 'rgba(0,0,0,0.28)'); edge.addColorStop(0.12, 'rgba(0,0,0,0)'); edge.addColorStop(0.88, 'rgba(0,0,0,0)'); edge.addColorStop(1, 'rgba(0,0,0,0.28)');
+  g.fillStyle = edge; g.fillRect(0, 0, w, h);
+
+  const rivet = (x, y, s = 4) => {
+    const rg = g.createRadialGradient(x - s * 0.35, y - s * 0.4, s * 0.1, x, y, s);
+    rg.addColorStop(0, '#d5dccd'); rg.addColorStop(0.55, '#7c8576'); rg.addColorStop(1, '#2d352b');
+    g.fillStyle = rg; g.beginPath(); g.arc(x, y, s, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(0,0,0,0.55)'; g.lineWidth = 0.8; g.beginPath(); g.arc(x, y, s, 0, TAU); g.stroke();
+  };
+  const slot = (x, y, ang) => {
+    const sg = g.createRadialGradient(x - 2, y - 2, 1, x, y, 7);
+    sg.addColorStop(0, '#aab2a2'); sg.addColorStop(1, '#3a4337');
+    g.fillStyle = sg; g.beginPath(); g.arc(x, y, 6, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(0,0,0,0.75)'; g.lineWidth = 1.2; g.beginPath(); g.arc(x, y, 6, 0, TAU); g.stroke();
+    g.beginPath(); g.moveTo(x - Math.cos(ang) * 4.5, y - Math.sin(ang) * 4.5); g.lineTo(x + Math.cos(ang) * 4.5, y + Math.sin(ang) * 4.5); g.stroke();
+  };
+  const outside = (x, y, pad = 96) => Math.hypot(x - cx, y - cy) > R + pad;
+  const seam = (x1, y1, x2, y2) => {
+    g.lineWidth = 2; g.strokeStyle = 'rgba(0,0,0,0.7)'; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+    g.lineWidth = 1; g.strokeStyle = 'rgba(255,255,255,0.12)'; g.beginPath(); g.moveTo(x1, y1 + 2); g.lineTo(x2, y2 + 2); g.stroke();
+  };
+  // panel seams: header strip, footer strip, and the two side panels
+  seam(0, st.top, w, st.top); seam(0, h - st.bot, w, h - st.bot);
+  // rivet rows along the seams and the cabinet edges
+  for (let x = 14; x < w; x += 30) for (const y of [st.top - 9, st.top + 11, h - st.bot - 9, h - st.bot + 11]) if (outside(x, y)) rivet(x, y, 3);
+  for (let y = 40; y < h - 30; y += 44) for (const x of [11, w - 11]) if (outside(x, y, 60)) rivet(x, y, 3.4);
+  for (const [x, y] of [[16, 16], [w - 16, 16], [16, h - 16], [w - 16, h - 16]]) slot(x, y, (x + y) % 3);
+
+  // the collar: a raised steel ring that the panels wrap around
+  g.save(); g.shadowColor = 'rgba(0,0,0,0.85)'; g.shadowBlur = 34; g.shadowOffsetY = 10;
+  const col = g.createLinearGradient(cx - R, cy - R, cx + R, cy + R);
+  col.addColorStop(0, '#9aa68f'); col.addColorStop(0.35, '#66725f'); col.addColorStop(0.7, '#3d473a'); col.addColorStop(1, '#262d24');
+  g.fillStyle = col; g.beginPath(); g.arc(cx, cy, R + 90, 0, TAU); g.fill(); g.restore();
+  g.strokeStyle = '#070a06'; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, R + 90, 0, TAU); g.stroke();
+  g.strokeStyle = 'rgba(255,255,255,0.22)'; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, R + 87, Math.PI * 1.02, Math.PI * 1.72); g.stroke();
+  // stepped inner ring
+  const step = g.createLinearGradient(cx - R, cy - R, cx + R, cy + R);
+  step.addColorStop(0, '#2b3328'); step.addColorStop(1, '#889382');
+  g.fillStyle = step; g.beginPath(); g.arc(cx, cy, R + 62, 0, TAU); g.fill();
+  g.strokeStyle = 'rgba(0,0,0,0.8)'; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, R + 62, 0, TAU); g.stroke();
+  const ring2 = g.createLinearGradient(cx - R, cy - R, cx + R, cy + R);
+  ring2.addColorStop(0, '#8e9a86'); ring2.addColorStop(0.5, '#515c4d'); ring2.addColorStop(1, '#2a3127');
+  g.fillStyle = ring2; g.beginPath(); g.arc(cx, cy, R + 52, 0, TAU); g.fill();
+  g.strokeStyle = '#05070a'; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, R + 52, 0, TAU); g.stroke();
+  // collar rivets and bolts
+  for (let d = 0; d < 360; d += 7.5) { const a = d * DEG; rivet(cx + Math.cos(a) * (R + 76), cy + Math.sin(a) * (R + 76), 3.2); }
+  for (const d of [45, 135, 225, 315]) { const a = d * DEG; slot(cx + Math.cos(a) * (R + 57), cy + Math.sin(a) * (R + 57), a); }
+
+  // black bearing ring with an amber scale, like the real thing
+  g.fillStyle = '#070a06'; g.beginPath(); g.arc(cx, cy, R + 40, 0, TAU); g.fill();
+  g.strokeStyle = '#1a2118'; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, R + 40, 0, TAU); g.stroke();
+  g.lineCap = 'butt';
+  for (let d = 0; d < 360; d += 2) {
+    const a = (d - 90) * DEG; const big = d % 10 === 0; const huge = d % 30 === 0;
+    const r1 = R + (huge ? 30 : big ? 32 : 34); const r2 = R + 38;
+    g.strokeStyle = huge ? '#ffbf5e' : 'rgba(255,170,70,0.75)'; g.lineWidth = huge ? 2 : 1;
+    g.beginPath(); g.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1); g.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2); g.stroke();
+  }
+  g.fillStyle = '#ffbf5e'; g.font = '12px "Share Tech Mono", monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  for (let d = 0; d < 360; d += 30) {
+    const a = (d - 90) * DEG;
+    g.fillText(String(d).padStart(3, '0'), cx + Math.cos(a) * (R + 16), cy + Math.sin(a) * (R + 16));
+  }
+  g.strokeStyle = '#000'; g.lineWidth = 6; g.beginPath(); g.arc(cx, cy, R + 2, 0, TAU); g.stroke();
+  return c;
+}
+
 const ww2 = {
   name: 'ww2', sweep: true,
   init(s) { s.noise = noiseTile(128, 0.08); s.noiseShift = 0; },
   background(r) {
-    const { ctx, w, h, cx, cy, R } = r;
-    ctx.fillStyle = '#020502';
-    ctx.fillRect(0, 0, w, h);
+    const { ctx, w, h, cx, cy, R, state, radar } = r;
+    PAL = PALS[r.display.phosphor] || PALS.green;
+    if (radar.stage) {
+      const key = `${w}x${h}:${cx},${cy},${R}:${radar.stage.top},${radar.stage.bot}:${radar.dpr}`;
+      if (!state.chassis || state.chassis.key !== key) state.chassis = { key, canvas: buildChassis(r) };
+      ctx.drawImage(state.chassis.canvas, 0, 0, w, h);
+    } else {
+      ctx.fillStyle = '#020502';
+      ctx.fillRect(0, 0, w, h);
+    }
     const g = ctx.createRadialGradient(cx, cy, R * 0.05, cx, cy, R);
-    g.addColorStop(0, '#0c2a0c');
-    g.addColorStop(0.7, '#071a07');
-    g.addColorStop(1, '#041004');
+    g.addColorStop(0, PAL.bg[0]);
+    g.addColorStop(0.7, PAL.bg[1]);
+    g.addColorStop(1, PAL.bg[2]);
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill();
   },
   grid(r) {
     const { ctx, cx, cy, R } = r;
     ctx.save();
-    ctx.strokeStyle = 'rgba(109,255,109,0.20)';
-    ctx.fillStyle = 'rgba(109,255,109,0.45)';
+    ctx.strokeStyle = `rgba(${PAL.main},0.20)`;
+    ctx.fillStyle = `rgba(${PAL.main},0.45)`;
     ctx.font = '11px "Special Elite", monospace';
     ctx.lineWidth = 1;
-    rings(r, (rad, text) => {
+    if (r.display.rings !== false) rings(r, (rad, text) => {
       ctx.beginPath(); ctx.arc(cx, cy, rad, 0, TAU); ctx.stroke();
       ctx.fillText(text, cx + 4, cy - rad + 13);
     });
     ctx.setLineDash([2, 6]);
-    for (let a = 0; a < 360; a += 30) {
+    for (let a = 0; a < 360 && r.display.spokes !== false; a += 30) {
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(cx + Math.sin(a * DEG) * R, cy - Math.cos(a * DEG) * R);
@@ -129,10 +235,10 @@ const ww2 = {
     }
     ctx.restore();
     // home marker
-    ctx.strokeStyle = 'rgba(109,255,109,0.7)';
+    ctx.strokeStyle = `rgba(${PAL.main},0.7)`;
     ctx.beginPath(); ctx.moveTo(cx - 6, cy); ctx.lineTo(cx + 6, cy); ctx.moveTo(cx, cy - 6); ctx.lineTo(cx, cy + 6); ctx.stroke();
   },
-  heat(r, cells) { heatCells(r, cells, (a) => `rgba(109,255,109,${a})`); },
+  heat(r, cells) { heatCells(r, cells, (a) => `rgba(${PAL.main},${a})`); },
   gps(r, cells) { gpsCells(r, cells, 'rgba(255,179,71,0.5)', (s) => `rgba(255,179,71,${0.08 + s * 0.12})`); },
   trail() {},
   track(r, pts) {
@@ -145,14 +251,20 @@ const ww2 = {
     const { ctx, now, display } = r;
     const d = a.d;
     if (!a.paint) return;
+    // altitude gate selector: ALL, HIGH (10,000 ft and up), LOW (below it, or on the ground), MIL
+    const gate = display.gate || 'all';
+    if (gate !== 'all' && !selected) {
+      const pass = gate === 'mil' ? isMil(d) : gate === 'high' ? (!d.og && d.ab != null && d.ab >= 10000) : (d.og || (d.ab != null && d.ab < 10000));
+      if (!pass) { a.screen = null; return; }
+    }
     const period = (display.sweepSeconds || 8) * 1000;
     const age = now - a.paint.t;
-    const fade = Math.max(0, 1 - age / (period * 1.05));
+    const fade = Math.max(0, 1 - age / (period * 1.05 * Math.max(0.3, display.persist ?? 1)));
     const emg = d.sq && EMERGENCY.has(d.sq);
     const glow = (x, y, k, size) => {
       const [sx, sy] = r.toScreen(x, y);
       const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, size * 2.6);
-      const col = emg ? '255,90,74' : '150,255,140';
+      const col = emg ? '255,90,74' : PAL.glow;
       g.addColorStop(0, `rgba(${col},${k})`);
       g.addColorStop(0.35, `rgba(${col},${k * 0.45})`);
       g.addColorStop(1, `rgba(${col},0)`);
@@ -166,7 +278,7 @@ const ww2 = {
     const [sx, sy] = glow(a.paint.x, a.paint.y, Math.max(0.12, fade) * alpha, size);
     a.screen = [sx, sy];
     if (isMil(d)) {
-      ctx.strokeStyle = `rgba(150,255,140,${0.6 * alpha})`;
+      ctx.strokeStyle = `rgba(${PAL.glow},${0.6 * alpha})`;
       ctx.strokeRect(sx - 7, sy - 7, 14, 14);
     }
     if (emg && blink(now)) {
@@ -177,9 +289,9 @@ const ww2 = {
       ctx.font = '11px "Special Elite", monospace';
       const l1 = label(d); const l2 = d.og ? 'GROUND' : `ANGELS ${d.ab == null ? '?' : Math.round(d.ab / 1000)}`;
       const [lx, ly] = r.place(sx, sy, Math.max(ctx.measureText(l1).width, ctx.measureText(l2).width), 24);
-      ctx.fillStyle = `rgba(185,245,176,${(selected ? 1 : 0.35 + fade * 0.55) * alpha})`;
+      ctx.fillStyle = `rgba(${PAL.text},${(selected ? 1 : 0.35 + fade * 0.55) * alpha})`;
       ctx.fillText(l1, lx, ly + 10);
-      ctx.fillStyle = `rgba(185,245,176,${(selected ? 0.85 : 0.25 + fade * 0.4) * alpha})`;
+      ctx.fillStyle = `rgba(${PAL.text},${(selected ? 0.85 : 0.25 + fade * 0.4) * alpha})`;
       ctx.fillText(l2, lx, ly + 22);
     }
     if (selected) {
@@ -197,42 +309,64 @@ const ww2 = {
     const a = (sweep - 90) * DEG;
     ctx.save();
     clipScope(r);
-    if (ctx.createConicGradient) {
+    const beamOn = r.display.beam !== false;
+    if (beamOn && ctx.createConicGradient) {
       const g = ctx.createConicGradient(a - 1.2, cx, cy);
-      g.addColorStop(0, 'rgba(109,255,109,0)');
-      g.addColorStop(1.2 / TAU, 'rgba(109,255,109,0.20)');
-      g.addColorStop(1.2 / TAU + 0.0001, 'rgba(109,255,109,0)');
-      g.addColorStop(1, 'rgba(109,255,109,0)');
+      g.addColorStop(0, `rgba(${PAL.main},0)`);
+      g.addColorStop(1.2 / TAU, `rgba(${PAL.main},0.20)`);
+      g.addColorStop(1.2 / TAU + 0.0001, `rgba(${PAL.main},0)`);
+      g.addColorStop(1, `rgba(${PAL.main},0)`);
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a - 1.2, a); ctx.closePath(); ctx.fill();
     }
-    ctx.strokeStyle = 'rgba(190,255,180,0.85)';
-    ctx.lineWidth = 1.6;
-    ctx.shadowColor = 'rgba(109,255,109,0.9)'; ctx.shadowBlur = 8;
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); ctx.stroke();
-    ctx.shadowBlur = 0;
+    if (beamOn) {
+      ctx.strokeStyle = `rgba(${PAL.beam},0.85)`;
+      ctx.lineWidth = 1.6;
+      ctx.shadowColor = `rgba(${PAL.main},0.9)`; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
     // grain
     state.noiseShift = (state.noiseShift + 37) % 128;
     const pat = ctx.createPattern(state.noise, 'repeat');
     ctx.translate(state.noiseShift, state.noiseShift * 0.7);
     ctx.fillStyle = pat;
-    ctx.fillRect(-state.noiseShift, -state.noiseShift, w + 128, h + 128);
+    const gain = Math.max(0, r.display.gain ?? 1);
+    for (let p = 0; p < Math.ceil(gain); p++) { ctx.globalAlpha = Math.min(1, gain - p); ctx.fillRect(-state.noiseShift, -state.noiseShift, w + 128, h + 128); }
+    ctx.globalAlpha = 1;
     ctx.restore();
+    // brightness knob: dim the tube, or push it past normal
+    const bright = r.display.brightness ?? 1;
+    if (Math.abs(bright - 1) > 0.02) {
+      ctx.save(); clipScope(r);
+      if (bright < 1) { ctx.fillStyle = `rgba(0,0,0,${(1 - bright) * 0.85})`; ctx.fillRect(cx - R, cy - R, R * 2, R * 2); }
+      else { ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = `rgba(60,150,60,${(bright - 1) * 0.35})`; ctx.fillRect(cx - R, cy - R, R * 2, R * 2); }
+      ctx.restore();
+    }
+    if (r.radar.stage) {
+      // glass reflection instead of the plain bezel and vignette
+      ctx.save(); clipScope(r);
+      const gl = ctx.createLinearGradient(cx - R, cy - R, cx + R * 0.2, cy + R * 0.2);
+      gl.addColorStop(0, 'rgba(255,255,255,0.07)'); gl.addColorStop(0.5, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gl; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+      ctx.restore();
+      return;
+    }
     // bezel
     ctx.save();
     ctx.lineWidth = 10;
     ctx.strokeStyle = '#0e140d';
     ctx.beginPath(); ctx.arc(cx, cy, R + 6, 0, TAU); ctx.stroke();
     ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(109,255,109,0.35)';
+    ctx.strokeStyle = `rgba(${PAL.main},0.35)`;
     ctx.beginPath(); ctx.arc(cx, cy, R + 1, 0, TAU); ctx.stroke();
-    ctx.fillStyle = 'rgba(109,255,109,0.55)';
+    ctx.fillStyle = `rgba(${PAL.main},0.55)`;
     ctx.font = '11px "Special Elite", monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (let d = 0; d < 360; d += 10) {
       const rad = (d - 90) * DEG;
       const inner = d % 30 === 0 ? R - 10 : R - 5;
-      ctx.strokeStyle = 'rgba(109,255,109,0.45)';
+      ctx.strokeStyle = `rgba(${PAL.main},0.45)`;
       ctx.beginPath(); ctx.moveTo(cx + Math.cos(rad) * inner, cy + Math.sin(rad) * inner); ctx.lineTo(cx + Math.cos(rad) * R, cy + Math.sin(rad) * R); ctx.stroke();
       if (d % 30 === 0) ctx.fillText(String(d).padStart(3, '0'), cx + Math.cos(rad) * (R + 20), cy + Math.sin(rad) * (R + 20));
     }
@@ -242,7 +376,7 @@ const ww2 = {
     v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.65)');
     ctx.fillStyle = v; ctx.fillRect(0, 0, w, h);
   },
-  flyby(r, x, y, ang) { pixelShip(r.ctx, x, y, ang, 2, ['#b9f5b0', '#6dff6d']); },
+  flyby(r, x, y, ang) { pixelShip(r.ctx, x, y, ang, 2, [PAL.hi, PAL.hex]); },
 };
 
 /* =====================================================================
@@ -673,7 +807,7 @@ const omniverse = {
 
 export const THEMES = { ww2, tower, space, omniverse };
 export const THEME_META = {
-  ww2: { title: 'WW2 plot room', sub: 'Phosphor scope with a rotating sweep', brand: 'SKYWATCH', tagline: 'Chain Home · plot room', swatch: ['#030703', '#6dff6d', '#ffb347'] },
+  ww2: { title: 'WW2 information center', sub: 'Phosphor scope in a radar console, with working knobs', brand: 'SKYWATCH', tagline: 'Aircraft warning service', swatch: ['#030703', '#6dff6d', '#ffb347'] },
   tower: { title: 'Control tower', sub: 'Approach scope, data blocks, leader lines', brand: 'SKYWATCH APP', tagline: 'Approach control', swatch: ['#0a0f14', '#e8f4fa', '#3fd0ff'] },
   space: { title: 'Deep field', sub: 'Holographic station scope with altitude stalks', brand: 'SKYWATCH//DEEP FIELD', tagline: 'Orbital tracking array', swatch: ['#03030a', '#59f3ff', '#ff4fd8'] },
   omniverse: { title: 'Omniverse', sub: 'Pixel starscape with your Wingnaut as controller', brand: 'SKYWATCH OMNIVERSE', tagline: 'Signals from the static', swatch: ['#121e28', '#f26b1d', '#33d1c1'] },

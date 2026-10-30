@@ -2,7 +2,7 @@ manifestVersion: 1
 id: skywatch-radar
 category: automation
 name: Skywatch Radar
-version: "0.2.1"
+version: "0.3.6"
 tagline: A live radar screen for the aircraft around your home
 icon: https://raw.githubusercontent.com/PatriotCrypto/umbrel-skywatch/main/app/public/img/icon.svg
 description: >-
@@ -37,8 +37,8 @@ description: >-
 
   Skywatch is an unofficial community app and is not affiliated with or endorsed by Wingbits.
 releaseNotes: >-
-  Fixes quiet hours running on the server's UTC clock. They now follow the timezone of the
-  browser you use to open Skywatch.
+  In the WW2 view, a new "?" button next to the telegraph key shows a Morse code chart, and
+  there is one more easter egg for the key.
 developer: PatriotCrypto
 website: https://github.com/PatriotCrypto/umbrel-skywatch
 dependencies: []

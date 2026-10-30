@@ -3,6 +3,7 @@ import { THEME_META, RARITY_COLORS } from './themes.js';
 import { $, h, api, store, fmtAlt, fmtDist, fmtNum, fmtDur, fmtAgo, fmtWhen, cardinal, label } from './util.js';
 import { openPanel, refreshPanel, currentPanel, loadHeat } from './panels.js';
 import * as snd from './audio.js';
+import { initConsole, layoutConsole, consoleData, updateConsole, consoleFoo } from './console.js';
 
 export const app = {
   settings: null, status: null, snapshot: null, ruleTypes: {}, categories: {}, version: '',
@@ -15,11 +16,15 @@ store('viewer', viewerId);
 const radar = new Radar($('#radar'), {
   onSelect: (hit) => {
     if (hit?.controller) return controllerClick();
+    if (hit?.foo) return consoleFoo();
     if (hit?.flyby) { snd.zap(); return showOperatorCard(); }
     select(hit?.hex || null);
   },
   onFlyby: (f) => snd.flybyWhoosh(f.dur, Math.cos(f.a0) * 0.8, Math.cos(f.a1) * 0.8),
-  onContact: (d, emergency) => { if (emergency) snd.alarm(); else snd.ping(false); },
+  onContact: (d, emergency) => { if (currentTheme() === 'ww2') { if (emergency) snd.klaxon(); } else if (emergency) snd.alarm(); else snd.ping(false); },
+  onSweep: () => snd.sweepThump(),
+  onBlip: (pan) => snd.blip(pan),
+  onFoo: () => snd.warble(),
   getDisplay: () => ({ ...(app.settings?.display || {}), ...(store('display') || {}) }),
 });
 app.radar = radar;
@@ -30,7 +35,8 @@ async function boot() {
   const s = await api('api/state');
   app.settings = s.settings; app.status = s.status; app.version = s.version;
   app.ruleTypes = s.ruleTypes; app.categories = s.categories;
-  snd.initAudio({ isOmniverse: () => currentTheme() === 'omniverse', isQuiet: inQuiet });
+  snd.initAudio({ isOmniverse: () => currentTheme() === 'omniverse', isQuiet: inQuiet, isWw2: () => currentTheme() === 'ww2' });
+  initConsole({ app, radar, currentTheme, openPanelBtn: (p) => openPanel(p) });
   applyTheme(currentTheme());
   const saved = store('range');
   if (saved) radar.rangeNm = saved;
@@ -82,6 +88,7 @@ function connect() {
     const p = JSON.parse(e.data);
     app.snapshot = p;
     radar.setData(p);
+    consoleData();
     if (app.selected) renderCard();
     if (currentPanel() === 'watch') refreshPanel();
   });
@@ -90,8 +97,8 @@ function connect() {
   es.addEventListener('watch', () => { if (currentPanel() === 'watch') refreshPanel(); });
   es.addEventListener('alert', (e) => onAlert(JSON.parse(e.data)));
   es.addEventListener('newtype', () => snd.levelUp());
-  es.onopen = () => banner(null);
-  es.onerror = () => banner('Lost connection to the radar. Reconnecting…');
+  es.onopen = () => { app.linkDown = false; banner(null); };
+  es.onerror = () => { app.linkDown = true; banner('Lost connection to the radar. Reconnecting…'); };
 }
 
 function presence() {
@@ -105,11 +112,13 @@ export function currentTheme() { return store('theme') || app.settings?.display.
 export function applyTheme(name) {
   document.documentElement.dataset.theme = name;
   radar.setTheme(name);
+  layoutConsole();
   snd.syncAmbient();
   const meta = THEME_META[name];
   $('#brandTitle').textContent = meta.brand;
   document.querySelector('meta[name=theme-color]').setAttribute('content', meta.swatch[0]);
   renderHud();
+  updateConsole();
 }
 
 export function setTheme(name, persist = true) {

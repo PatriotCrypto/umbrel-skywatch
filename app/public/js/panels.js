@@ -458,15 +458,17 @@ async function renderSettings(opts) {
   const sp = soundPrefs();
   const sp_save = (patch) => saveSoundPrefs(patch);
   const vol = h('input', { type: 'range', min: 0.05, max: 1, step: 0.05, value: sp.vol, oninput: (e) => sp_save({ vol: Number(e.target.value) }), onchange: () => previewSound() });
-  wrap.append(section('Sound (Omniverse view)',
-    h('p', { class: 'muted' }, 'Radio calls, runway-light clicks, the Big Bang and more, only in the Omniverse view. Saved on this screen only, so the living room PC can play sound while your laptop stays quiet. Browsers need one click or key press after loading before they allow sound.'),
+  wrap.append(section('Sound',
+    h('p', { class: 'muted' }, 'Radio calls, runway-light clicks, the Big Bang and more in the Omniverse view, and telegraph beeps in the WW2 console. Saved on this screen only, so the living room PC can play sound while your laptop stays quiet. Browsers need one click or key press after loading before they allow sound.'),
     check('Sound on', sp.on, async (v) => { sp_save({ on: v }); if (v) previewSound(); refreshPanel(); }),
     sp.on ? h('div', {},
       h('label', { class: 'field' }, h('span', {}, 'Volume'), vol),
       check('Controller: mic clicks, radio calls, runway lights, Big Bang', sp.controller, (v) => sp_save({ controller: v })),
       check('Spaceship flyby and zap', sp.ship, (v) => sp_save({ ship: v })),
       check('Radar: new contact ping, new type chime, emergency squawk alert', sp.radar, (v) => sp_save({ radar: v })),
-      check('Quiet ambient hum', sp.ambient, (v) => sp_save({ ambient: v })),
+      check('Quiet ambient hum (Omniverse)', sp.ambient, (v) => sp_save({ ambient: v })),
+      check('WW2 console: radar blips, relay clacks, switch clunks, telegraph key, klaxon', sp.ww2, (v) => sp_save({ ww2: v })),
+      check('WW2 console: transformer hum', sp.hum, (v) => sp_save({ hum: v })),
       h('p', { class: 'muted' }, 'Sound also stays off during your quiet hours.')) : null));
 
   // --- Notifications

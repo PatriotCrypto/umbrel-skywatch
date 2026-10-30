@@ -13,7 +13,7 @@ Put it full screen on a spare monitor and leave it running.
 
 ## What it does
 
-- **Four view styles.** A WW2 phosphor scope with a rotating sweep, a modern
+- **Four view styles.** A WW2 radar console (phosphor scope in a steel cabinet, with working knobs, switches, lamps and gauges), a modern
   approach-control screen with data blocks and leader lines, a holographic deep-field
   display with altitude stalks, and a pixel-art Omniverse. Each screen remembers its own style.
 - **Smooth on a small budget.** Between polls, every contact keeps moving along its
