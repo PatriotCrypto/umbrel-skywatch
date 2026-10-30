@@ -13,7 +13,7 @@ export const DEFAULTS = {
     preset: 'balanced',    // eco | balanced | max | custom
     customInterval: 60,
     idle: 'slow',          // slow | pause
-    quiet: { enabled: false, start: '23:00', end: '06:00' },
+    quiet: { enabled: false, start: '23:00', end: '06:00', tz: '' },
     detailsDailyCap: 60,
     watchSearch: false,
     watchSearchMinutes: 60,
@@ -78,6 +78,11 @@ export function applyUpdate(current, patch) {
   return validate(next);
 }
 
+function validZone(tz) {
+  if (!tz || typeof tz !== 'string' || tz.length > 64) return false;
+  try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true; } catch { return false; }
+}
+
 function validate(s) {
   const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
   const lat = Number(s.home.lat); const lon = Number(s.home.lon);
@@ -93,6 +98,7 @@ function validate(s) {
   b.preset = ['eco', 'balanced', 'max', 'custom'].includes(b.preset) ? b.preset : 'balanced';
   b.customInterval = num(b.customInterval, 5, 3600, 60);
   b.idle = b.idle === 'pause' ? 'pause' : 'slow';
+  b.quiet.tz = validZone(b.quiet.tz) ? String(b.quiet.tz) : '';
   b.detailsDailyCap = num(b.detailsDailyCap, 0, 1000, 60);
   b.watchSearchMinutes = num(b.watchSearchMinutes, 15, 1440, 60);
   b.watchSearchDailyCap = num(b.watchSearchDailyCap, 0, 500, 24);

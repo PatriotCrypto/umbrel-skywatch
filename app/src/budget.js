@@ -19,6 +19,19 @@ export const LIMITS = {
   minSecondsToReset: 60,
 };
 
+/** Minutes since midnight in the given IANA timezone (the browser's), else the server's clock. */
+function minutesNow(date, tz) {
+  if (tz) {
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', hour: 'numeric', minute: 'numeric' }).formatToParts(date);
+      const get = (t) => Number(parts.find((p) => p.type === t)?.value);
+      const h = get('hour'); const m = get('minute');
+      if (Number.isFinite(h) && Number.isFinite(m)) return (h % 24) * 60 + m;
+    } catch { /* unknown zone: fall back */ }
+  }
+  return date.getHours() * 60 + date.getMinutes();
+}
+
 export function inQuietHours(quiet, date = new Date()) {
   if (!quiet || !quiet.enabled) return false;
   const toMin = (s) => {
@@ -27,7 +40,7 @@ export function inQuietHours(quiet, date = new Date()) {
   };
   const start = toMin(quiet.start);
   const end = toMin(quiet.end);
-  const now = date.getHours() * 60 + date.getMinutes();
+  const now = minutesNow(date, quiet.tz);
   if (start === end) return false;
   return start < end ? now >= start && now < end : now >= start || now < end;
 }

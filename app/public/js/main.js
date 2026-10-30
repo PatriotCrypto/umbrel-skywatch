@@ -40,10 +40,22 @@ async function boot() {
   document.addEventListener('visibilitychange', presence);
   setInterval(renderHud, 1000);
   renderHud();
+  syncTimezone();
   loadOperator();
   loadHeat().catch(() => {});
   setInterval(() => loadHeat().catch(() => {}), 5 * 60000);
   if (needsSetup() && !store('welcomed')) { store('welcomed', true); openPanel('settings', { welcome: true }); }
+}
+
+// The Umbrel container runs in UTC, so tell the server which timezone quiet hours are in
+async function syncTimezone() {
+  let tz = '';
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch { return; }
+  if (!tz || app.settings?.budget?.quiet?.tz === tz) return;
+  try {
+    const r = await api('api/settings', { method: 'PUT', body: { budget: { quiet: { tz } } } });
+    app.settings = r.settings; app.status = r.status;
+  } catch { /* try again next load */ }
 }
 
 // Sound stays off during the same quiet hours that slow the polling

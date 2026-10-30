@@ -84,6 +84,15 @@ test('quiet hours wrap past midnight', () => {
   assert.equal(inQuietHours({ ...q, enabled: false }, at(3)), false);
 });
 
+test('quiet hours follow the timezone given, not the server clock', () => {
+  const q = { enabled: true, start: '00:00', end: '06:00', tz: 'America/New_York' };
+  const utc0125 = new Date(Date.UTC(2026, 9, 30, 1, 25)); // 21:25 on Oct 29 in New York
+  assert.equal(inQuietHours(q, utc0125), false);
+  assert.equal(inQuietHours({ ...q, tz: 'UTC' }, utc0125), true);
+  assert.equal(inQuietHours(q, new Date(Date.UTC(2026, 9, 30, 7, 0))), true); // 03:00 in New York
+  assert.equal(inQuietHours({ ...q, tz: 'Not/AZone' }, utc0125) === inQuietHours({ ...q, tz: '' }, utc0125), true);
+});
+
 test('quiet hours slow the radar even when a screen is open', () => {
   const b = computeBudget({ usage: usage(), budget: budget(), watched: true, quiet: true, now });
   assert.equal(b.state, 'quiet');

@@ -7,7 +7,7 @@ services:
       APP_PORT: 3928
 
   web:
-    image: ghcr.io/patriotcrypto/skywatch-radar:0.2.0
+    image: ghcr.io/patriotcrypto/skywatch-radar:0.2.1
     user: "1000:1000"
     restart: on-failure
     stop_grace_period: 10s
